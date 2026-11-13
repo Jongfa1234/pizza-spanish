@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-kBsiN8byEG1bCEo+ZssiYtTF2/UaQlgEfheDvviCxNU='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; media-src 'self' blob:; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-EaCp9h8kfxUmGgl5niDJcwySudpkAwr4Mfp4ztI54UE='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; media-src 'self' blob:; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#1f6b45">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -514,35 +514,46 @@ const Mic = {
  },
  startNative(h){
   // iPhone (iOS 27) has an Apple bug where speech recognition stops hearing after the first try
-  // (WebKit bug 321436). The workaround that works: say a short cue with the phone's voice, start
-  // listening right when it ends, listen for one phrase, and never cut the session short.
+  // (WebKit bug 321436). Workaround: say a short cue with the phone's voice, start listening right
+  // when it ends, listen for one phrase. After each word the mic is released, and if an old session
+  // is still holding the mic, it is shut down and a brand-new recognizer is used.
   const ios=IS_IOS;
   const rec=this.rec||(this.rec=new this.Native());
-  rec.lang=S.lang; rec.interimResults=true; rec.maxAlternatives=5; rec.continuous=!ios;
+  rec.lang=S.lang; rec.interimResults=!ios; rec.maxAlternatives=5; rec.continuous=!ios;
   const s={mode:"native",h,rec,list:[],err:null}; this.s=s;
+  const clear=()=>[s.boot,s.max,s.fin,s.wait,s.cue].forEach(clearTimeout);
   const text=()=>{ const all=s.list.map(r=>r[0]).join(" ").trim(); const last=(s.list[s.list.length-1]||[""])[0].trim();
     return [...new Set([all,last].filter(Boolean))] };
-  s.done=()=>{ if(s.over) return; s.over=true; [s.boot,s.max,s.fin,s.wait,s.cue].forEach(clearTimeout);
+  const drop=()=>{ try{rec.abort()}catch(e){} if(this.rec===rec){ this.rec=null; this.recBusy=false } };
+  // Let the session end on its own; if it is still holding the mic shortly after, stop it, then drop it.
+  const release=()=>{ if(s.ended) return;
+    if(!ios){ try{rec.abort()}catch(e){} return }
+    setTimeout(()=>{ if(s.ended) return; try{rec.stop()}catch(e){}
+      setTimeout(()=>{ if(!s.ended) drop() },1500) },1000) };
+  s.done=()=>{ if(s.over) return; s.over=true; clear();
     if(this.s===s) this.s=null;
-    if(!s.ended && !ios){ try{rec.abort()}catch(e){} }
+    release();
     const alts=[...new Set([...text(), ...s.list.flatMap(r=>r.slice(1))])];
     if(text().length) return h.result(alts);
-    if(!ios && this.rec===rec){ this.rec=null; this.recBusy=false }
+    if(this.rec===rec && !ios){ this.rec=null; this.recBusy=false }
     h.error(s.err||(ios&&s.started&&!s.stoppedByTap?"ios-stuck":s.stoppedByTap?"stopped-early":"no-speech")) };
+  s.quiet=()=>{ s.over=true; clear(); if(this.s===s) this.s=null; release() };
   rec.onstart=()=>{ if(s.over) return; s.started=true; clearTimeout(s.boot);
     s.max=setTimeout(()=>{ ios? (s.list.length? s.done() : (s.err="ios-stuck", s.done())) : this.finish() }, ios?9000:20000); h.started() };
   rec.onresult=e=>{ if(!s.started||s.over) return; s.list=[]; for(let i=0;i<e.results.length;i++){ s.list.push([...e.results[i]].map(a=>a.transcript)) }
     const t=text(); h.partial(t[0]||"");
-    if(ios && s.stoppedByTap && e.results[e.results.length-1].isFinal) s.done() };
+    if(ios && e.results[e.results.length-1].isFinal) s.done() };
   rec.onerror=e=>{ if(!s.started||s.over) return; if(e.error!=="no-speech"&&e.error!=="aborted"){ s.err=e.error; s.done() } };
-  rec.onend=()=>{ this.recBusy=false;
+  rec.onend=()=>{ if(this.rec===rec) this.recBusy=false;
     if(!s.started){ if(s.waiting){ s.waiting=false; clearTimeout(s.wait); begin() } return }
     s.ended=true; s.done() };
+  const fresh=()=>{ // start over with a brand-new recognizer
+    s.over=true; clear(); try{rec.abort()}catch(e){} if(this.rec===rec){ this.rec=null; this.recBusy=false }
+    this.s=null; this.startNative(Object.assign({},h,{fresh:true})) };
   const go=()=>{ if(s.over) return; this.recBusy=true;
     try{ rec.start() }catch(e){ this.recBusy=false;
-      if(!s.retried){ s.retried=true; if(!ios){ try{rec.abort()}catch(_){} } s.waiting=true; s.wait=setTimeout(()=>{s.waiting=false;go()},ios?1500:700) }
-      else { s.err="no-start"; s.done() } } };
-  // On iPhone, start listening right after a short spoken cue ends.
+      if(!h.fresh) return fresh();
+      s.err="no-start"; s.done() } };
   const begin=()=>{ if(s.over) return;
     if(!ios || !Voice.hasSS()) return go();
     h.cue&&h.cue();
@@ -550,10 +561,11 @@ const Mic = {
     try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance("Ahora tú."); const v=Voice.pick(); if(v){u.voice=v;u.lang=v.lang}else u.lang=S.lang;
       u.rate=1.1; u.onend=fire; u.onerror=fire; Voice.cur=u; speechSynthesis.speak(u) }catch(e){ return fire() }
     s.cue=setTimeout(fire,3000) };
-  // If the mic never starts, give the screen back.
-  s.boot=setTimeout(()=>{ if(!s.started&&!s.over){ s.err="no-start"; s.done() } }, ios?12000:7000);
-  if(this.recBusy){ s.waiting=true; if(!ios){ try{rec.abort()}catch(e){} }
-    s.wait=setTimeout(()=>{ if(s.waiting){ s.waiting=false; this.recBusy=false; begin() } }, ios?6000:700) }
+  // If the mic never starts, try once with a brand-new recognizer, then give the screen back.
+  s.boot=setTimeout(()=>{ if(!s.started&&!s.over){ if(!h.fresh) return fresh(); s.err="no-start"; s.done(); drop() } }, ios?7000:7000);
+  if(this.recBusy){ // an earlier session is still holding the mic: ask it to stop, then move on
+    s.waiting=true; try{ ios?rec.stop():rec.abort() }catch(e){}
+    s.wait=setTimeout(()=>{ if(s.waiting){ s.waiting=false; fresh() } },1500) }
   else begin();
  },
  // Tap "done": stop listening, wait briefly for the last words, then score.
@@ -563,14 +575,12 @@ const Mic = {
     return t? s.h.result([t]) : s.h.error("stopped-early") }
   if(s.finishing) return; s.finishing=true; s.stoppedByTap=true; s.h.checking&&s.h.checking();
   if(!s.started) return s.done();
-  if(IS_IOS){ // never cut the iPhone session short: use what we have, or let it finish on its own
-    const last=s.list[s.list.length-1]; if(last) return s.done();
-    s.fin=setTimeout(()=>s.done(),4000); return }
+  if(IS_IOS && s.list.length) return s.done();
   try{s.rec.stop()}catch(e){ return s.done() }
   s.fin=setTimeout(()=>s.done(),2500);
  },
  cancel(){ const s=this.s; if(!s)return; this.s=null; clearTimeout(s.quiet); clearTimeout(s.max);
-  clearTimeout(s.boot); clearTimeout(s.fin); if(s.mode==="dict") this.dict.stop().catch(()=>{}); else { s.over=true; [s.boot,s.max,s.fin,s.wait,s.cue].forEach(clearTimeout); if(!s.ended&&!IS_IOS){ try{s.rec.abort()}catch(e){} } } s.h.error("cancelled") }
+  clearTimeout(s.boot); clearTimeout(s.fin); if(s.mode==="dict") this.dict.stop().catch(()=>{}); else { s.quiet() } s.h.error("cancelled") }
 };
 const MIC_ERR = {
  "ios-stuck":"Your iPhone's speech recognition stopped hearing. This is a known Apple bug in iOS 27. Swipe the app fully closed and reopen it, then try again. You can also record yourself below.",
