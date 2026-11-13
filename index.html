@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-nfAfpTOHU7dMPXvm5CLPgPFm6nx2Gln4b7+tOuJcjck='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; media-src 'self' blob:; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-Hdv2D4qJ6dkrlk3K0muDzlJA/NKA1hd2pfc65keNCKY='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; media-src 'self' blob:; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#1f6b45">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -513,24 +513,34 @@ const Mic = {
   s.max=setTimeout(()=>this.finish(),15000);
  },
  startNative(h){
-  // Keeps listening until you tap to stop, then waits for the final words and scores them.
-  const rec=new this.Native(); rec.lang=S.lang; rec.interimResults=true; rec.maxAlternatives=5; rec.continuous=true;
+  // One recognizer is reused for every try (iPhone fails when a new one starts while the last is still closing).
+  // It keeps listening until you tap to stop, then waits for the final words and scores them.
+  const rec=this.rec||(this.rec=new this.Native());
+  rec.lang=S.lang; rec.interimResults=true; rec.maxAlternatives=5; rec.continuous=true;
   const s={mode:"native",h,rec,list:[],err:null}; this.s=s;
   const text=()=>{ const all=s.list.map(r=>r[0]).join(" ").trim(); const last=(s.list[s.list.length-1]||[""])[0].trim();
     return [...new Set([all,last].filter(Boolean))] };
-  s.done=()=>{ if(s.over) return; s.over=true; clearTimeout(s.boot); clearTimeout(s.max); clearTimeout(s.fin);
-    if(this.s===s) this.s=null; rec.onend=rec.onresult=rec.onerror=null;
-    setTimeout(()=>{try{rec.abort()}catch(e){}},0);
+  s.done=()=>{ if(s.over) return; s.over=true; clearTimeout(s.boot); clearTimeout(s.max); clearTimeout(s.fin); clearTimeout(s.wait);
+    if(this.s===s) this.s=null;
+    if(!s.ended){ try{rec.abort()}catch(e){} }
     const alts=[...new Set([...text(), ...s.list.flatMap(r=>r.slice(1))])];
-    if(text().length) h.result(alts); else h.error(s.err||(s.stoppedByTap?"stopped-early":"no-speech")) };
-  // If the mic never starts (iPhone can hang here), give the screen back after 6 seconds.
-  s.boot=setTimeout(()=>{ if(!s.started&&!s.over){ s.over=true; if(this.s===s) this.s=null; rec.onend=rec.onresult=null; setTimeout(()=>{try{rec.abort()}catch(e){}},0); h.error("no-start") } },6000);
-  rec.onstart=()=>{ s.started=true; clearTimeout(s.boot); s.max=setTimeout(()=>this.finish(),20000); h.started() };
-  rec.onresult=e=>{ s.list=[]; for(let i=0;i<e.results.length;i++){ s.list.push([...e.results[i]].map(a=>a.transcript)) }
+    if(text().length) return h.result(alts);
+    // Nothing came through: use a brand-new recognizer next time in case this one is stuck.
+    if(this.rec===rec) this.rec=null; this.recBusy=false;
+    h.error(s.err||(s.stoppedByTap?"stopped-early":"no-speech")) };
+  rec.onstart=()=>{ if(s.over){ try{rec.abort()}catch(e){} return } s.started=true; clearTimeout(s.boot); s.max=setTimeout(()=>this.finish(),20000); h.started() };
+  rec.onresult=e=>{ if(!s.started||s.over) return; s.list=[]; for(let i=0;i<e.results.length;i++){ s.list.push([...e.results[i]].map(a=>a.transcript)) }
     const t=text(); h.partial(t[0]||"") };
-  rec.onerror=e=>{ s.err=e.error; if(e.error!=="no-speech"&&e.error!=="aborted") s.done() };
-  rec.onend=()=>s.done();
-  try{rec.start()}catch(e){clearTimeout(s.boot);this.s=null;h.error("failed")}
+  rec.onerror=e=>{ if(!s.started||s.over) return; s.err=e.error; if(e.error!=="no-speech"&&e.error!=="aborted") s.done() };
+  rec.onend=()=>{ this.recBusy=false;
+    if(!s.started){ if(s.waiting){ s.waiting=false; clearTimeout(s.wait); go() } return }
+    s.ended=true; s.done() };
+  const go=()=>{ if(s.over) return; this.recBusy=true;
+    try{ rec.start() }catch(e){ this.recBusy=false; if(!s.retried){ s.retried=true; try{rec.abort()}catch(_){} s.waiting=true; s.wait=setTimeout(()=>{s.waiting=false;go()},700) } else { s.done() } } };
+  // If the mic never starts, give the screen back after 7 seconds.
+  s.boot=setTimeout(()=>{ if(!s.started&&!s.over){ s.err="no-start"; s.done() } },7000);
+  if(this.recBusy){ s.waiting=true; try{rec.abort()}catch(e){} s.wait=setTimeout(()=>{ if(s.waiting){ s.waiting=false; this.recBusy=false; go() } },700) }
+  else go();
  },
  // Tap "done": stop listening, wait briefly for the last words, then score.
  finish(){ const s=this.s; if(!s)return;
@@ -543,7 +553,7 @@ const Mic = {
   s.fin=setTimeout(()=>s.done(),2500);
  },
  cancel(){ const s=this.s; if(!s)return; this.s=null; clearTimeout(s.quiet); clearTimeout(s.max);
-  clearTimeout(s.boot); clearTimeout(s.fin); if(s.mode==="dict") this.dict.stop().catch(()=>{}); else { s.over=true; s.rec.onend=s.rec.onresult=s.rec.onerror=null; setTimeout(()=>{try{s.rec.abort()}catch(e){}},0) } s.h.error("cancelled") }
+  clearTimeout(s.boot); clearTimeout(s.fin); if(s.mode==="dict") this.dict.stop().catch(()=>{}); else { s.over=true; clearTimeout(s.max); clearTimeout(s.wait); if(!s.ended){ try{s.rec.abort()}catch(e){} } } s.h.error("cancelled") }
 };
 const MIC_ERR = {
  "no-start":"The mic didn't start. Tap the button to try again. If it keeps happening on iPhone, open the link in Safari instead of the home-screen icon, or record yourself below.",
@@ -651,7 +661,7 @@ function micWidget(target, onDone){
   $("[data-again]",out).onclick=()=>{out.innerHTML="";onDone&&onDone({score:0,self:true})};
  };
  const showErr=code=>{ idle(); live.textContent="";
-  out.innerHTML=`<div class="note">${esc(MIC_ERR[code]||"Something went wrong with the microphone. Try again.")}</div>`;
+  out.innerHTML=`<div class="note">${esc(MIC_ERR[code]||"Something went wrong with the microphone. Try again.")} <span class="muted">(${esc(code)})</span></div>`;
 };
  const rm=$("[data-recmode]",box);
  if(rm) rm.onclick=()=>{ Mic.cancel(); mode="rec"; rm.remove(); idle(); out.innerHTML=`<div class="note">Record yourself, then compare with the Spanish voice.</div>` };
