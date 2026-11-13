@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-Hdv2D4qJ6dkrlk3K0muDzlJA/NKA1hd2pfc65keNCKY='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; media-src 'self' blob:; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-kBsiN8byEG1bCEo+ZssiYtTF2/UaQlgEfheDvviCxNU='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; media-src 'self' blob:; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#1f6b45">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -513,34 +513,48 @@ const Mic = {
   s.max=setTimeout(()=>this.finish(),15000);
  },
  startNative(h){
-  // One recognizer is reused for every try (iPhone fails when a new one starts while the last is still closing).
-  // It keeps listening until you tap to stop, then waits for the final words and scores them.
+  // iPhone (iOS 27) has an Apple bug where speech recognition stops hearing after the first try
+  // (WebKit bug 321436). The workaround that works: say a short cue with the phone's voice, start
+  // listening right when it ends, listen for one phrase, and never cut the session short.
+  const ios=IS_IOS;
   const rec=this.rec||(this.rec=new this.Native());
-  rec.lang=S.lang; rec.interimResults=true; rec.maxAlternatives=5; rec.continuous=true;
+  rec.lang=S.lang; rec.interimResults=true; rec.maxAlternatives=5; rec.continuous=!ios;
   const s={mode:"native",h,rec,list:[],err:null}; this.s=s;
   const text=()=>{ const all=s.list.map(r=>r[0]).join(" ").trim(); const last=(s.list[s.list.length-1]||[""])[0].trim();
     return [...new Set([all,last].filter(Boolean))] };
-  s.done=()=>{ if(s.over) return; s.over=true; clearTimeout(s.boot); clearTimeout(s.max); clearTimeout(s.fin); clearTimeout(s.wait);
+  s.done=()=>{ if(s.over) return; s.over=true; [s.boot,s.max,s.fin,s.wait,s.cue].forEach(clearTimeout);
     if(this.s===s) this.s=null;
-    if(!s.ended){ try{rec.abort()}catch(e){} }
+    if(!s.ended && !ios){ try{rec.abort()}catch(e){} }
     const alts=[...new Set([...text(), ...s.list.flatMap(r=>r.slice(1))])];
     if(text().length) return h.result(alts);
-    // Nothing came through: use a brand-new recognizer next time in case this one is stuck.
-    if(this.rec===rec) this.rec=null; this.recBusy=false;
-    h.error(s.err||(s.stoppedByTap?"stopped-early":"no-speech")) };
-  rec.onstart=()=>{ if(s.over){ try{rec.abort()}catch(e){} return } s.started=true; clearTimeout(s.boot); s.max=setTimeout(()=>this.finish(),20000); h.started() };
+    if(!ios && this.rec===rec){ this.rec=null; this.recBusy=false }
+    h.error(s.err||(ios&&s.started&&!s.stoppedByTap?"ios-stuck":s.stoppedByTap?"stopped-early":"no-speech")) };
+  rec.onstart=()=>{ if(s.over) return; s.started=true; clearTimeout(s.boot);
+    s.max=setTimeout(()=>{ ios? (s.list.length? s.done() : (s.err="ios-stuck", s.done())) : this.finish() }, ios?9000:20000); h.started() };
   rec.onresult=e=>{ if(!s.started||s.over) return; s.list=[]; for(let i=0;i<e.results.length;i++){ s.list.push([...e.results[i]].map(a=>a.transcript)) }
-    const t=text(); h.partial(t[0]||"") };
-  rec.onerror=e=>{ if(!s.started||s.over) return; s.err=e.error; if(e.error!=="no-speech"&&e.error!=="aborted") s.done() };
+    const t=text(); h.partial(t[0]||"");
+    if(ios && s.stoppedByTap && e.results[e.results.length-1].isFinal) s.done() };
+  rec.onerror=e=>{ if(!s.started||s.over) return; if(e.error!=="no-speech"&&e.error!=="aborted"){ s.err=e.error; s.done() } };
   rec.onend=()=>{ this.recBusy=false;
-    if(!s.started){ if(s.waiting){ s.waiting=false; clearTimeout(s.wait); go() } return }
+    if(!s.started){ if(s.waiting){ s.waiting=false; clearTimeout(s.wait); begin() } return }
     s.ended=true; s.done() };
   const go=()=>{ if(s.over) return; this.recBusy=true;
-    try{ rec.start() }catch(e){ this.recBusy=false; if(!s.retried){ s.retried=true; try{rec.abort()}catch(_){} s.waiting=true; s.wait=setTimeout(()=>{s.waiting=false;go()},700) } else { s.done() } } };
-  // If the mic never starts, give the screen back after 7 seconds.
-  s.boot=setTimeout(()=>{ if(!s.started&&!s.over){ s.err="no-start"; s.done() } },7000);
-  if(this.recBusy){ s.waiting=true; try{rec.abort()}catch(e){} s.wait=setTimeout(()=>{ if(s.waiting){ s.waiting=false; this.recBusy=false; go() } },700) }
-  else go();
+    try{ rec.start() }catch(e){ this.recBusy=false;
+      if(!s.retried){ s.retried=true; if(!ios){ try{rec.abort()}catch(_){} } s.waiting=true; s.wait=setTimeout(()=>{s.waiting=false;go()},ios?1500:700) }
+      else { s.err="no-start"; s.done() } } };
+  // On iPhone, start listening right after a short spoken cue ends.
+  const begin=()=>{ if(s.over) return;
+    if(!ios || !Voice.hasSS()) return go();
+    h.cue&&h.cue();
+    let fired=false; const fire=()=>{ if(fired) return; fired=true; clearTimeout(s.cue); go() };
+    try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance("Ahora tú."); const v=Voice.pick(); if(v){u.voice=v;u.lang=v.lang}else u.lang=S.lang;
+      u.rate=1.1; u.onend=fire; u.onerror=fire; Voice.cur=u; speechSynthesis.speak(u) }catch(e){ return fire() }
+    s.cue=setTimeout(fire,3000) };
+  // If the mic never starts, give the screen back.
+  s.boot=setTimeout(()=>{ if(!s.started&&!s.over){ s.err="no-start"; s.done() } }, ios?12000:7000);
+  if(this.recBusy){ s.waiting=true; if(!ios){ try{rec.abort()}catch(e){} }
+    s.wait=setTimeout(()=>{ if(s.waiting){ s.waiting=false; this.recBusy=false; begin() } }, ios?6000:700) }
+  else begin();
  },
  // Tap "done": stop listening, wait briefly for the last words, then score.
  finish(){ const s=this.s; if(!s)return;
@@ -549,13 +563,17 @@ const Mic = {
     return t? s.h.result([t]) : s.h.error("stopped-early") }
   if(s.finishing) return; s.finishing=true; s.stoppedByTap=true; s.h.checking&&s.h.checking();
   if(!s.started) return s.done();
+  if(IS_IOS){ // never cut the iPhone session short: use what we have, or let it finish on its own
+    const last=s.list[s.list.length-1]; if(last) return s.done();
+    s.fin=setTimeout(()=>s.done(),4000); return }
   try{s.rec.stop()}catch(e){ return s.done() }
   s.fin=setTimeout(()=>s.done(),2500);
  },
  cancel(){ const s=this.s; if(!s)return; this.s=null; clearTimeout(s.quiet); clearTimeout(s.max);
-  clearTimeout(s.boot); clearTimeout(s.fin); if(s.mode==="dict") this.dict.stop().catch(()=>{}); else { s.over=true; clearTimeout(s.max); clearTimeout(s.wait); if(!s.ended){ try{s.rec.abort()}catch(e){} } } s.h.error("cancelled") }
+  clearTimeout(s.boot); clearTimeout(s.fin); if(s.mode==="dict") this.dict.stop().catch(()=>{}); else { s.over=true; [s.boot,s.max,s.fin,s.wait,s.cue].forEach(clearTimeout); if(!s.ended&&!IS_IOS){ try{s.rec.abort()}catch(e){} } } s.h.error("cancelled") }
 };
 const MIC_ERR = {
+ "ios-stuck":"Your iPhone's speech recognition stopped hearing. This is a known Apple bug in iOS 27. Swipe the app fully closed and reopen it, then try again. You can also record yourself below.",
  "no-start":"The mic didn't start. Tap the button to try again. If it keeps happening on iPhone, open the link in Safari instead of the home-screen icon, or record yourself below.",
  "not-allowed":"Microphone is blocked. Allow the microphone for this page in your browser settings, then try again.",
  "not_granted":"Microphone access is off for this page. You can turn it on in the page's Permissions menu.",
@@ -670,7 +688,8 @@ function micWidget(target, onDone){
    if(Mic.listening()){Mic.finish();return}
    out.innerHTML=""; live.textContent="Getting the mic ready…"; on();
    Mic.start({
-    started(){live.textContent="Listening… say it, then tap the button"},
+    started(){live.textContent=IS_IOS?"Listening… say it now":"Listening… say it, then tap the button"},
+    cue(){live.textContent="Get ready…"},
     checking(){btn.classList.remove("on");btn.innerHTML=`<span>Checking what you said…</span>`},
     partial(t){live.textContent=t},
     result(alts){idle(); live.textContent=""; const g=bestGrade(target,alts); out.innerHTML=feedbackHTML(target,g); onDone&&onDone(g)},
