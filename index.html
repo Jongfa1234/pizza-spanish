@@ -1,0 +1,830 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1f6b45">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Pizza Spanish">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+</head><body>
+<title>Pizza Counter Spanish</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+/* Layout: one phone-width column, sticky header, fixed bottom tab bar like a POS screen. */
+:root{
+  --bg:#f6f7f2; --surface:#ffffff; --sunk:#eceee5; --fg:#1d221c; --muted:#5e665b; --line:#d9ddd0;
+  --basil:#1f6b45; --basil-ink:#ffffff; --basil-soft:#dcebe1;
+  --tomato:#c63d25; --tomato-soft:#f8e0da; --crust:#b9781f; --crust-soft:#f6ead4;
+  --ok:#1f7a3f; --close:#a86a00; --miss:#bf3420;
+  --display:"Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --body:"Atkinson Hyperlegible", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --on-tomato:#ffffff; --r:14px; --nav-h:64px;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#121512; --surface:#1b201b; --sunk:#232923; --fg:#ecefe8; --muted:#a3ab9f; --line:#323a31;
+  --basil:#5cc48a; --basil-ink:#0d1a12; --basil-soft:#1d3427;
+  --tomato:#ff7a5f; --tomato-soft:#3a1f19; --crust:#e3a64a; --crust-soft:#372a17;
+  --ok:#6fd393; --close:#f0b54a; --miss:#ff8066; --on-tomato:#2a0d07; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#121512; --surface:#1b201b; --sunk:#232923; --fg:#ecefe8; --muted:#a3ab9f; --line:#323a31;
+  --basil:#5cc48a; --basil-ink:#0d1a12; --basil-soft:#1d3427;
+  --tomato:#ff7a5f; --tomato-soft:#3a1f19; --crust:#e3a64a; --crust-soft:#372a17;
+  --ok:#6fd393; --close:#f0b54a; --miss:#ff8066; --on-tomato:#2a0d07; color-scheme:dark }
+
+*{box-sizing:border-box}
+html,body{background:var(--bg)}
+body{color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:0 calc(var(--nav-h) + 24px + env(safe-area-inset-bottom,0px))}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--crust);outline-offset:2px}
+.wrap{max-width:560px;margin:0 auto}
+
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);
+  display:flex;align-items:center;gap:12px;padding-block:14px 10px;border-bottom:1px solid var(--line);margin-bottom:16px}
+.brand{flex:1;min-width:0}
+.brand h1{font-family:var(--display);font-weight:800;font-size:1.35rem;margin:0;letter-spacing:-.01em;line-height:1.1}
+.brand p{margin:0;color:var(--muted);font-size:.82rem}
+.ticket{font-family:var(--display);font-weight:700;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;
+  border:1.5px dashed var(--line);padding:5px 8px;border-radius:8px;color:var(--muted);white-space:nowrap;background:none}
+.iconbtn{width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;flex:none}
+.iconbtn svg{width:22px;height:22px}
+
+h2{font-family:var(--display);font-weight:800;font-size:1.6rem;letter-spacing:-.015em;margin:4px 0 4px;text-wrap:balance}
+.lede{color:var(--muted);margin:0 0 14px}
+.eyebrow{font-size:.72rem;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:700}
+
+.chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin:0 0 12px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:8px 14px;font-weight:700;font-size:.9rem}
+.chip[aria-pressed="true"]{background:var(--basil);color:var(--basil-ink);border-color:var(--basil)}
+
+.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.item{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 10px 12px 14px}
+.item .txt{flex:1;min-width:0;background:none;border:0;padding:0;text-align:left}
+.es{font-family:var(--display);font-weight:700;font-size:1.18rem;line-height:1.2;display:block}
+.en{color:var(--muted);display:block;font-size:.95rem}
+.alt{display:block;font-size:.82rem;color:var(--crust);margin-top:2px}
+.known-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);margin-left:6px;vertical-align:middle}
+.acts{display:flex;gap:6px;flex:none}
+.round{width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--sunk);display:grid;place-items:center}
+.round svg{width:20px;height:20px}
+.round.mic{background:var(--basil-soft);border-color:transparent;color:var(--basil)}
+
+.btn{border:0;border-radius:12px;padding:12px 18px;font-weight:700;background:var(--basil);color:var(--basil-ink);display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px}
+.btn.ghost{background:var(--sunk);color:var(--fg)}
+.btn.wide{width:100%}
+.btn svg{width:20px;height:20px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row > .btn{flex:1 1 140px}
+
+/* Practice panel */
+.sheet-bg{position:fixed;inset:0;background:rgb(0 0 0 / .45);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--bg);width:100%;max-width:600px;border-radius:20px 20px 0 0;max-height:92%;overflow:auto;
+  padding:18px max(18px,env(safe-area-inset-left,0px)) calc(22px + env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-right,0px))}
+.sheet .grab{width:44px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 14px}
+.sheet .es{font-size:1.6rem}
+.sheet-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+
+.mic-area{margin-top:16px;display:flex;flex-direction:column;gap:12px}
+.bigmic{width:100%;min-height:64px;border-radius:16px;border:0;background:var(--tomato);color:var(--on-tomato);font-weight:700;font-size:1.05rem;display:flex;align-items:center;justify-content:center;gap:10px}
+.bigmic svg{width:24px;height:24px}
+.bigmic.on{background:var(--fg);color:var(--bg);animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 8px var(--tomato-soft)}}
+@media (prefers-reduced-motion:reduce){.bigmic.on{animation:none}}
+.live{min-height:1.4em;color:var(--muted);font-style:italic}
+.fb{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:10px}
+.meter{height:10px;border-radius:5px;background:var(--sunk);overflow:hidden}
+.meter i{display:block;height:100%;background:var(--ok);border-radius:5px}
+.verdict{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.verdict b{font-family:var(--display);font-size:1.3rem}
+.verdict span{font-variant-numeric:tabular-nums;font-weight:700;font-size:1.2rem}
+.words{font-family:var(--display);font-size:1.2rem;font-weight:700;line-height:1.5}
+.w-ok{color:var(--ok)} .w-close{color:var(--close);text-decoration:underline wavy;text-underline-offset:4px}
+.w-miss{color:var(--miss);text-decoration:line-through}
+.heard{font-size:.9rem;color:var(--muted)}
+.tips{margin:0;padding-left:18px;font-size:.93rem;display:flex;flex-direction:column;gap:4px}
+.note{background:var(--crust-soft);border-radius:12px;padding:12px 14px;font-size:.92rem}
+
+/* Talk */
+.scen{display:flex;flex-direction:column;gap:10px}
+.scen button{text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;gap:12px;align-items:center}
+.scen .n{font-family:var(--display);font-weight:800;color:var(--crust);font-size:1.4rem;width:28px;flex:none;font-variant-numeric:tabular-nums}
+.scen b{display:block;font-family:var(--display);font-size:1.08rem}
+.scen small{color:var(--muted)}
+.chat{display:flex;flex-direction:column;gap:10px;margin:14px 0}
+.bub{max-width:88%;padding:10px 14px;border-radius:16px;border:1px solid var(--line)}
+.bub.c{align-self:flex-start;background:var(--surface);border-bottom-left-radius:4px}
+.bub.y{align-self:flex-end;background:var(--basil-soft);border-color:transparent;border-bottom-right-radius:4px}
+.bub .who{font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--muted)}
+.bub .es{font-size:1.05rem}
+.bub .en{font-size:.88rem}
+.bub button.replay{background:none;border:0;padding:0;color:var(--basil);font-weight:700;font-size:.85rem;margin-top:4px}
+.turn{background:var(--surface);border:2px solid var(--basil);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:10px}
+.hidden-es{filter:blur(7px);user-select:none;cursor:pointer}
+.toggle{display:flex;align-items:center;gap:8px;font-size:.92rem;color:var(--muted)}
+.toggle input{width:20px;height:20px;accent-color:var(--basil)}
+
+/* Quiz */
+.qcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px;display:flex;flex-direction:column;gap:14px}
+.qtop{display:flex;justify-content:space-between;align-items:center;font-variant-numeric:tabular-nums;color:var(--muted);font-weight:700;font-size:.9rem}
+.prog{height:6px;background:var(--sunk);border-radius:3px;overflow:hidden}
+.prog i{display:block;height:100%;background:var(--crust)}
+.prompt{font-family:var(--display);font-weight:800;font-size:1.7rem;line-height:1.15;text-wrap:balance}
+.opts{display:flex;flex-direction:column;gap:8px}
+.opt{text-align:left;border:1.5px solid var(--line);background:var(--bg);border-radius:12px;padding:13px 14px;font-weight:700;min-height:50px}
+.opt.right{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,var(--surface))}
+.opt.wrong{border-color:var(--miss);background:color-mix(in srgb,var(--miss) 12%,var(--surface))}
+.big-score{font-family:var(--display);font-weight:800;font-size:3.4rem;line-height:1;font-variant-numeric:tabular-nums}
+.setup{display:flex;flex-direction:column;gap:14px}
+label.field{display:flex;flex-direction:column;gap:6px;font-weight:700;font-size:.92rem}
+select,input[type=range]{width:100%}
+select{padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--surface)}
+
+/* Bottom nav */
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);
+  padding:6px max(8px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
+nav.tabs .in{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+nav.tabs a{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;border-radius:10px;color:var(--muted);text-decoration:none;font-size:.78rem;font-weight:700}
+nav.tabs a svg{width:24px;height:24px}
+nav.tabs a[aria-current="page"]{color:var(--basil);background:var(--basil-soft)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--nav-h) + 20px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:12px;z-index:30;font-weight:700;max-width:calc(100% - 32px);text-align:center}
+.muted{color:var(--muted)}
+.mt{margin-top:18px}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>Pizza Counter Spanish</h1>
+      <p id="sub">Spanish for the Domino's counter</p>
+    </div>
+    <button class="ticket" id="accentBtn" aria-label="Change accent">es-MX</button>
+    <button class="iconbtn" id="setBtn" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
+    </button>
+  </header>
+  <main id="view" aria-live="polite"></main>
+</div>
+
+<nav class="tabs" aria-label="Sections"><div class="in">
+  <a href="#words" data-tab="words"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3 3 20h18L12 3Z"/><circle cx="11" cy="13" r="1.4" fill="currentColor"/><circle cx="14" cy="16.5" r="1.4" fill="currentColor"/><circle cx="9" cy="17" r="1.2" fill="currentColor"/></svg>Toppings</a>
+  <a href="#phrases" data-tab="phrases"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4V5Z"/><path d="M8 9h8M8 12h5"/></svg>Phrases</a>
+  <a href="#talk" data-tab="talk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 4h11v8H7l-4 3V4Z"/><path d="M10 15v2h7l4 3V9h-4"/></svg>Practice</a>
+  <a href="#quiz" data-tab="quiz"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 12 2.5 2.5L16 9"/></svg>Quiz</a>
+</div></nav>
+
+<script>
+/* ---------- Content ---------- */
+const VOCAB = [
+ // [cat, es, en, note]
+ ["Crusts & sizes","la masa","crust / dough","Customers say “masa” for the crust type"],
+ ["Crusts & sizes","masa Hand Tossed","Hand Tossed crust","Most people just say the English name"],
+ ["Crusts & sizes","masa Pan hecha a mano","Handmade Pan crust","Also: masa gruesa de sartén"],
+ ["Crusts & sizes","masa delgada crujiente","Crunchy Thin crust"],
+ ["Crusts & sizes","estilo Brooklyn","Brooklyn Style"],
+ ["Crusts & sizes","estilo Nueva York","New York Style"],
+ ["Crusts & sizes","masa sin gluten","Gluten Free crust"],
+ ["Crusts & sizes","orilla rellena de parmesano","Parmesan Stuffed Crust","la orilla = the edge of the crust"],
+ ["Crusts & sizes","chica","small (10 inch)","Also: pequeña"],
+ ["Crusts & sizes","mediana","medium (12 inch)"],
+ ["Crusts & sizes","grande","large (14 inch)"],
+ ["Crusts & sizes","extra grande","X-Large (16 inch)"],
+ ["Crusts & sizes","pizza para una persona","a pizza for one (The Domino)"],
+ ["Crusts & sizes","la rebanada","slice","Also: el pedazo"],
+ ["Sauce & cheese","la salsa de tomate","tomato sauce (Robust Inspired)"],
+ ["Sauce & cheese","la salsa marinara","Hearty Marinara sauce"],
+ ["Sauce & cheese","la salsa barbecue con miel","Honey BBQ sauce"],
+ ["Sauce & cheese","la salsa blanca de ajo y parmesano","Garlic Parmesan white sauce"],
+ ["Sauce & cheese","la salsa Alfredo","Alfredo sauce"],
+ ["Sauce & cheese","el aderezo ranch","ranch"],
+ ["Sauce & cheese","poca salsa","light sauce"],
+ ["Sauce & cheese","extra salsa","extra sauce"],
+ ["Sauce & cheese","sin salsa","no sauce"],
+ ["Sauce & cheese","el queso","cheese"],
+ ["Sauce & cheese","extra queso","extra cheese","Also: doble queso"],
+ ["Sauce & cheese","el queso provolone","provolone"],
+ ["Sauce & cheese","el queso cheddar","cheddar"],
+ ["Sauce & cheese","el queso feta","feta"],
+ ["Sauce & cheese","parmesano y asiago","shredded Parmesan Asiago"],
+ ["Sauce & cheese","el vasito de salsa","dipping cup","Also: salsa para mojar"],
+ ["Meats","el pepperoni","pepperoni"],
+ ["Meats","el jamón","ham"],
+ ["Meats","la carne de res","beef"],
+ ["Meats","el salami","salami"],
+ ["Meats","la salchicha italiana","Italian sausage"],
+ ["Meats","el pollo","chicken"],
+ ["Meats","el tocino","bacon"],
+ ["Meats","el bistec estilo Philly","Philly steak"],
+ ["Meats","sin carne","no meat"],
+ ["Veggies","los champiñones","mushrooms","Also: los hongos"],
+ ["Veggies","la cebolla","onions"],
+ ["Veggies","el pimiento verde","green peppers","In Mexico also: el chile morrón"],
+ ["Veggies","los pimientos rojos asados","roasted red peppers"],
+ ["Veggies","los chiles banana","banana peppers"],
+ ["Veggies","los jalapeños","jalapeños"],
+ ["Veggies","las aceitunas negras","black olives"],
+ ["Veggies","el tomate en cubitos","diced tomatoes","Central Mexico: el jitomate"],
+ ["Veggies","la piña","pineapple"],
+ ["Veggies","la espinaca","spinach"],
+ ["Veggies","la salsa búfalo picante","hot buffalo sauce"],
+ ["Specialty pizzas","La ExtravaganZZa lleva de todo.","ExtravaganZZa has everything on it.","Pepperoni, ham, sausage, beef, onion, green pepper, mushrooms, olives, extra cheese"],
+ ["Specialty pizzas","La MeatZZa lleva pepperoni, jamón, salchicha y carne de res.","MeatZZa: pepperoni, ham, sausage and beef."],
+ ["Specialty pizzas","La Deluxe lleva pepperoni, salchicha, champiñones, cebolla y pimiento verde.","Deluxe: pepperoni, sausage, mushrooms, onion, green pepper."],
+ ["Specialty pizzas","La Honolulu Hawaiian lleva jamón, tocino, piña y pimientos rojos asados.","Honolulu Hawaiian: ham, bacon, pineapple, roasted red peppers."],
+ ["Specialty pizzas","La Pacific Veggie lleva espinaca, champiñones, cebolla, aceitunas y queso feta.","Pacific Veggie: spinach, mushrooms, onion, olives, feta."],
+ ["Specialty pizzas","La Cali Chicken Bacon Ranch lleva pollo, tocino y ranch.","Cali Chicken Bacon Ranch: chicken, bacon, ranch."],
+ ["Specialty pizzas","La Buffalo Chicken lleva pollo con salsa búfalo picante.","Buffalo Chicken: chicken with hot buffalo sauce."],
+ ["Specialty pizzas","La Philly Cheese Steak lleva bistec, cebolla y pimiento verde.","Philly Cheese Steak: steak, onion, green pepper."],
+ ["Specialty pizzas","La Spinach and Feta lleva espinaca, cebolla y queso feta.","Spinach & Feta: spinach, onion, feta."],
+ ["Specialty pizzas","La Wisconsin lleva seis quesos.","Wisconsin 6 Cheese has six cheeses."],
+ ["Sides & drinks","las alitas","wings"],
+ ["Sides & drinks","las alitas picantes","hot wings"],
+ ["Sides & drinks","el pollo sin hueso","boneless chicken"],
+ ["Sides & drinks","el pan trenzado de ajo","Garlic Bread Twists"],
+ ["Sides & drinks","el pan relleno de queso","Stuffed Cheesy Bread"],
+ ["Sides & drinks","la pasta Alfredo con pollo","Chicken Alfredo pasta"],
+ ["Sides & drinks","la ensalada","salad"],
+ ["Sides & drinks","el pastelito de chocolate","Chocolate Lava Crunch Cake","Also: el volcán de chocolate"],
+ ["Sides & drinks","el pan trenzado de canela","Cinnamon Bread Twists"],
+ ["Sides & drinks","el refresco de dos litros","2-liter soda"],
+ ["Sides & drinks","el agua embotellada","bottled water"],
+ ["Sides & drinks","las servilletas","napkins"],
+ ["Sides & drinks","los platos","plates"],
+].map(([cat,es,en,alt],i)=>({id:"v"+i,cat,es,en,alt}));
+
+const PHRASES = [
+ ["Greeting","Gracias por elegir Domino's. ¿En qué le puedo ayudar?","Thanks for choosing Domino's. How can I help you?"],
+ ["Greeting","¿Es para llevar o a domicilio?","Is it carryout or delivery?"],
+ ["Greeting","¿Ya sabe lo que va a pedir?","Do you know what you'd like?"],
+ ["Greeting","Un momento, por favor.","One moment, please."],
+ ["Greeting","Hablo un poco de español.","I speak a little Spanish."],
+ ["Taking the order","¿De qué tamaño?","What size?"],
+ ["Taking the order","¿Qué tipo de masa quiere?","What kind of crust would you like?"],
+ ["Taking the order","Tenemos Hand Tossed, Pan, delgada crujiente y estilo Brooklyn.","We have Hand Tossed, Pan, Crunchy Thin and Brooklyn Style."],
+ ["Taking the order","¿Qué ingredientes le pongo?","What toppings should I put on it?"],
+ ["Taking the order","¿Quiere alguna de nuestras pizzas especiales?","Do you want one of our specialty pizzas?"],
+ ["Taking the order","¿Algo más?","Anything else?"],
+ ["Taking the order","¿Algo de tomar?","Anything to drink?"],
+ ["Taking the order","¿Quiere agregar unas alitas o un pan trenzado?","Want to add some wings or bread twists?"],
+ ["Taking the order","¿Quiere un vasito de salsa para mojar?","Do you want a dipping cup?"],
+ ["Taking the order","Le repito su orden.","Let me read your order back."],
+ ["Deals","Con la promoción Mix and Match, cada artículo cuesta seis noventa y nueve.","With the Mix and Match deal, each item is six ninety-nine."],
+ ["Deals","Tiene que escoger dos o más artículos.","You have to pick two or more items."],
+ ["Deals","¿Tiene cuenta de Domino's Rewards?","Do you have a Domino's Rewards account?"],
+ ["Deals","Los precios pueden variar según la tienda.","Prices may vary by store."],
+ ["Pickup & delivery","¿Cuál es su dirección?","What's your address?"],
+ ["Pickup & delivery","¿Me da su número de teléfono?","Can I have your phone number?"],
+ ["Pickup & delivery","¿A qué nombre?","Under what name?"],
+ ["Pickup & delivery","Su pizza estará lista en quince minutos.","Your pizza will be ready in fifteen minutes."],
+ ["Pickup & delivery","La entrega tarda unos treinta minutos.","Delivery takes about thirty minutes."],
+ ["Pickup & delivery","Puede seguir su pedido en la app con el Tracker.","You can follow your order in the app with the Tracker."],
+ ["Paying","Su total es de veinticinco dólares.","Your total is twenty-five dollars."],
+ ["Paying","¿Va a pagar en efectivo o con tarjeta?","Paying cash or card?"],
+ ["Paying","Aquí tiene su cambio.","Here's your change."],
+ ["Paying","¿Quiere su recibo?","Do you want your receipt?"],
+ ["Paying","Gracias, que la disfrute.","Thanks, enjoy it."],
+ ["Problems","¿Tiene alguna alergia?","Do you have any allergies?"],
+ ["Problems","Perdón, no le entendí. ¿Me lo repite, por favor?","Sorry, I didn't understand. Can you repeat that?"],
+ ["Problems","Más despacio, por favor.","Slower, please."],
+ ["Problems","Lo siento, ya no tenemos piña hoy.","Sorry, we're out of pineapple today."],
+ ["Problems","Ahorita se la preparamos de nuevo.","We'll make it again for you right away.","Ahorita (right now) is very Mexican"],
+ ["Problems","Esta pizza no lleva carne.","This pizza has no meat."],
+].map(([cat,es,en,alt],i)=>({id:"p"+i,cat,es,en,alt}));
+
+const SCENES = [
+ {t:"Carryout: a large pepperoni", d:"Crust, Mix and Match, dipping cups", lines:[
+  ["y","Gracias por elegir Domino's. ¿En qué le puedo ayudar?","Thanks for choosing Domino's. How can I help you?"],
+  ["c","Hola. Quiero una pizza grande de pepperoni, por favor.","Hi. I want a large pepperoni pizza, please."],
+  ["y","¿Qué tipo de masa quiere?","What kind of crust would you like?"],
+  ["c","Hand Tossed, por favor.","Hand Tossed, please."],
+  ["y","Si agrega otro artículo, entra en la promoción Mix and Match.","If you add another item, it counts for the Mix and Match deal."],
+  ["c","Ah, bueno. Entonces también unas alitas picantes.","Oh, okay. Then some hot wings too."],
+  ["y","¿Quiere un vasito de salsa para mojar?","Do you want a dipping cup?"],
+  ["c","Sí, un ranch, por favor.","Yes, a ranch, please."],
+  ["y","Muy bien. Su pedido estará listo en quince minutos.","Great. Your order will be ready in fifteen minutes."]]},
+ {t:"Delivery: an ExtravaganZZa", d:"Address, phone number and the Tracker", lines:[
+  ["y","Gracias por llamar a Domino's. ¿Es para llevar o a domicilio?","Thanks for calling Domino's. Carryout or delivery?"],
+  ["c","A domicilio, por favor.","Delivery, please."],
+  ["y","¿Cuál es su dirección?","What's your address?"],
+  ["c","Calle Maple, número doscientos diez.","210 Maple Street."],
+  ["y","¿Me da su número de teléfono?","Can I have your phone number?"],
+  ["c","Es el cinco, cinco, cinco, uno, dos, tres, cuatro.","It's 555-1234."],
+  ["y","¿Qué le gustaría pedir?","What would you like to order?"],
+  ["c","Una ExtravaganZZa grande y un refresco de dos litros.","A large ExtravaganZZa and a two-liter soda."],
+  ["y","La entrega tarda unos treinta minutos. Puede seguir su pedido en la app.","Delivery takes about thirty minutes. You can follow your order in the app."],
+  ["c","Perfecto, gracias.","Perfect, thanks."]]},
+ {t:"Half and half with changes", d:"Split toppings, light sauce, extra cheese", lines:[
+  ["c","¿Puedo pedir una pizza mitad y mitad?","Can I order a half and half pizza?"],
+  ["y","Claro que sí. ¿Qué ingredientes en cada mitad?","Of course. What toppings on each half?"],
+  ["c","Una mitad de pepperoni y la otra mitad de champiñones.","One half pepperoni and the other half mushrooms."],
+  ["y","¿Qué tipo de masa quiere?","What kind of crust would you like?"],
+  ["c","Delgada crujiente, con poca salsa.","Crunchy Thin, with light sauce."],
+  ["y","¿La quiere con extra queso?","Do you want it with extra cheese?"],
+  ["c","Sí, y sin cebolla, por favor.","Yes, and no onion, please."],
+  ["y","Perfecto. Una grande delgada, mitad pepperoni, mitad champiñones, poca salsa y extra queso.","Perfect. A large thin, half pepperoni, half mushroom, light sauce and extra cheese."]]},
+ {t:"Vegetarian and gluten free", d:"Which pizzas have no meat", lines:[
+  ["c","Disculpe, soy vegetariana. ¿Qué pizzas no llevan carne?","Excuse me, I'm vegetarian. Which pizzas have no meat?"],
+  ["y","La Pacific Veggie, la Spinach and Feta y la Wisconsin no llevan carne.","Pacific Veggie, Spinach & Feta and Wisconsin have no meat."],
+  ["c","¿Y la Pacific Veggie qué lleva?","And what's on the Pacific Veggie?"],
+  ["y","Lleva espinaca, champiñones, cebolla, aceitunas, tomate y queso feta.","It has spinach, mushrooms, onion, olives, tomato and feta."],
+  ["c","¿Tienen masa sin gluten?","Do you have gluten free crust?"],
+  ["y","Sí, en tamaño chico, pero se prepara en la misma cocina. No se recomienda para personas celíacas.","Yes, in small, but it's made in the same kitchen. It's not recommended for people with celiac disease."],
+  ["c","Está bien, una chica sin gluten, por favor.","Okay, a small gluten free, please."]]},
+ {t:"The Domino for one", d:"The new single-serve pizza", lines:[
+  ["c","¿Qué es la pizza Domino?","What is the Domino pizza?"],
+  ["y","Es una pizza para una persona, estilo Detroit, con orilla de parmesano.","It's a pizza for one, Detroit style, with a Parmesan crust."],
+  ["c","¿Cuántos ingredientes le puedo poner?","How many toppings can I put on it?"],
+  ["y","Hasta tres ingredientes, y usted escoge la salsa.","Up to three toppings, and you choose the sauce."],
+  ["c","Entonces una con pepperoni y salchicha, con salsa marinara.","Then one with pepperoni and sausage, with marinara sauce."],
+  ["y","Muy bien. ¿Algo de tomar?","Very good. Anything to drink?"],
+  ["c","No, es todo.","No, that's all."]]},
+ {t:"Sides, dessert and paying", d:"Wings, lava cakes, cash or card", lines:[
+  ["c","También quiero pan trenzado de ajo y dos pastelitos de chocolate.","I also want garlic bread twists and two lava cakes."],
+  ["y","Muy bien. ¿Algo más?","Very good. Anything else?"],
+  ["c","No, gracias. ¿Cuánto es?","No, thanks. How much is it?"],
+  ["y","Su total es de treinta y un dólares con cincuenta centavos.","Your total is thirty-one fifty."],
+  ["c","¿Aceptan tarjeta?","Do you take cards?"],
+  ["y","Sí, aceptamos tarjeta y efectivo.","Yes, we take card and cash."],
+  ["c","Con tarjeta, por favor.","Card, please."],
+  ["y","Gracias por elegir Domino's. Que la disfrute.","Thanks for choosing Domino's. Enjoy it."]]},
+ {t:"When you don't understand", d:"Asking someone to repeat or slow down", lines:[
+  ["c","Quiero una grande con todo menos aceitunas.","I want a large with everything except olives."],
+  ["y","Perdón, no le entendí. ¿Me lo repite más despacio, por favor?","Sorry, I didn't catch that. Can you repeat it slower, please?"],
+  ["c","Una ExtravaganZZa grande, pero sin aceitunas.","A large ExtravaganZZa, but no olives."],
+  ["y","Ah, una ExtravaganZZa grande sin aceitunas. ¿Algo más?","Ah, a large ExtravaganZZa with no olives. Anything else?"],
+  ["c","No, es todo.","No, that's all."],
+  ["y","Muy bien. ¿A qué nombre?","Very good. Under what name?"],
+  ["c","A nombre de Carlos.","Under Carlos."]]},
+];
+
+const ACCENTS = {"es-MX":"Mexican","es-US":"US Spanish","es-419":"Latin American","es-ES":"Spain"};
+
+/* ---------- Storage (per-device convenience only) ---------- */
+function load(k,d){try{const v=localStorage.getItem("pcs:"+k);return v==null?d:JSON.parse(v)}catch(e){return d}}
+function save(k,v){try{localStorage.setItem("pcs:"+k,JSON.stringify(v))}catch(e){}}
+const S = {lang:load("lang","es-MX"), rate:load("rate",0.9), known:new Set(load("known",[])), best:load("best",null), hideEs:load("hideEs",false)};
+function markKnown(id){ if(!S.known.has(id)){S.known.add(id);save("known",[...S.known])} }
+
+/* ---------- Helpers ---------- */
+const $ = (s,el=document)=>el.querySelector(s);
+const esc = s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const shuffle = a=>{a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+const ICON = {
+ spk:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4Z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>',
+ slow:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4Z"/><path d="M16.5 9.5a3.5 3.5 0 0 1 0 5"/></svg>',
+ mic:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
+ stop:'<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',
+};
+function toast(msg,ms=2600){const t=document.createElement("div");t.className="toast";t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),ms)}
+
+/* ---------- Speech out ---------- */
+const Voice = {
+ voices:[], tts:null, cur:null, helped:false,
+ init(){
+  if(this.hasSS()){const f=()=>{try{this.voices=speechSynthesis.getVoices()||[]}catch(e){}};f();
+   try{speechSynthesis.addEventListener("voiceschanged",f)}catch(e){speechSynthesis.onvoiceschanged=f}
+   setTimeout(f,500);setTimeout(f,2000)}
+  if(window.claude?.use) claude.use("tts").then(t=>{this.tts=t}).catch(()=>{});
+ },
+ hasSS(){return "speechSynthesis" in window && typeof SpeechSynthesisUtterance!=="undefined"},
+ pick(){
+  if(this.hasSS() && !this.voices.length){try{this.voices=speechSynthesis.getVoices()||[]}catch(e){}}
+  const nl=v=>(v.lang||"").replace("_","-").toLowerCase();
+  const es=this.voices.filter(v=>nl(v).startsWith("es"));
+  if(!es.length) return null;
+  const L=S.lang.toLowerCase(), lat=["es-mx","es-us","es-419"];
+  return es.find(v=>nl(v)===L) || (L!=="es-es" && es.find(v=>lat.includes(nl(v)))) || es.find(v=>nl(v)!=="es-es") || es[0];
+ },
+ ttsSay(text,rate){
+  return this.tts.speak(text,{language:S.lang==="es-419"?"es-MX":S.lang, rate:Math.max(0.7,Math.min(1.5,rate))})
+   .catch(e=>{ const c=e&&e.code; if(c==="stopped"||c==="replaced")return; if(c==="busy")return toast("Finish speaking first, then tap play.");
+     if(c==="not_granted"){this.tts=null;} this.fail() });
+ },
+ say(text,slow){
+  const rate = slow ? 0.65 : S.rate;
+  const v = this.pick();
+  if(Mic.listening()) Mic.cancel();
+  // Device voice first when it has a Spanish voice; otherwise the Claude voice; otherwise try the device anyway.
+  if(this.hasSS() && (v || !this.tts)){
+   const ss=speechSynthesis;
+   try{ if(ss.speaking||ss.pending) ss.cancel(); ss.resume(); }catch(e){}
+   const u=new SpeechSynthesisUtterance(text); this.cur=u; // keep a reference so the browser doesn't drop it
+   if(v){u.voice=v;u.lang=v.lang}else u.lang=S.lang;
+   u.rate=rate; u.volume=1;
+   let started=false; u.onstart=()=>{started=true};
+   u.onerror=e=>{ if(e.error!=="interrupted"&&e.error!=="canceled"&&!started){ this.tts?this.ttsSay(text,rate):this.fail() } };
+   try{ ss.speak(u) }catch(e){ return this.tts?this.ttsSay(text,rate):this.fail() }
+   clearTimeout(this.chk);
+   this.chk=setTimeout(()=>{ if(this.cur===u && !started && !ss.speaking){ try{ss.cancel()}catch(e){} this.tts?this.ttsSay(text,rate):this.fail() } },2500);
+   return;
+  }
+  if(this.tts) return this.ttsSay(text,rate);
+  this.fail();
+ },
+ fail(){ if(this.helped) return toast("No sound came out. Open Settings › Sound help."); this.helped=true; openSoundHelp() },
+ stop(){clearTimeout(this.chk);this.cur=null;try{speechSynthesis.cancel()}catch(e){} try{this.tts?.stop()}catch(e){}}
+};
+function soundHelpHTML(){
+ const v=Voice.pick();
+ const where = !Voice.hasSS() && !Voice.tts ? "This browser has no built-in voice. " : !v && !Voice.tts ? "This phone doesn't have a Spanish voice installed yet. " : "";
+ return `<div class="note"><b>No sound?</b> ${where}Try these in order:
+  <ol class="tips" style="margin-top:6px">
+   <li>Turn the volume up. On iPhone, also flip the side switch off silent mode.</li>
+   <li>If you opened the app inside the Claude app, open the link in <b>Chrome</b> (Android) or <b>Safari</b> (iPhone) instead.</li>
+   <li>Install a Spanish voice. Android: Settings › Accessibility › Text-to-speech › Speech Recognition &amp; Synthesis from Google › Install voice data › Spanish (Mexico or United States). iPhone: Settings › Accessibility › Spoken Content › Voices › Spanish.</li>
+   <li>Close the browser tab and open the link again.</li>
+  </ol>
+  <div class="muted" style="margin-top:6px">Voice in use: ${v?esc(v.name+" ("+v.lang+")"):Voice.tts?"Claude voice":"none found"}</div></div>`;
+}
+function openSoundHelp(){
+ const bg=document.createElement("div"); bg.className="sheet-bg";
+ bg.innerHTML=`<div class="sheet" role="dialog" aria-modal="true" aria-label="Sound help"><div class="grab"></div>
+  <div class="sheet-head"><h2 style="margin:0">Sound help</h2><button class="iconbtn" data-x aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="setup mt">${soundHelpHTML()}<button class="btn" data-t>${ICON.spk}Test sound: “Hola, bienvenido”</button></div></div>`;
+ const close=()=>bg.remove();
+ bg.addEventListener("click",e=>{if(e.target===bg)close()}); $("[data-x]",bg).onclick=close;
+ $("[data-t]",bg).onclick=()=>{Voice.helped=true;Voice.say("Hola, bienvenido. ¿Qué le puedo servir?")};
+ document.body.appendChild(bg);
+}
+
+/* ---------- Speech in ---------- */
+const Mic = {
+ dict:null, Native: window.SpeechRecognition||window.webkitSpeechRecognition, framed: window.parent!==window, s:null,
+ init(){
+  if(window.claude?.use) claude.use("dictation").then(d=>{
+   if(!d) return; this.dict=d;
+   d.onPartial(({text})=>{ if(this.s?.mode==="dict"){ this.s.part=text; this.s.h.partial((this.s.text+" "+text).trim()) } });
+   d.onFinal(({text})=>{ const s=this.s; if(s?.mode!=="dict")return; s.text+=text; s.part=""; s.h.partial(s.text.trim());
+     clearTimeout(s.quiet); s.quiet=setTimeout(()=>this.finish(),1500) });
+   d.onState(({state,reason})=>{ const s=this.s; if(!s||s.mode!=="dict"||state!=="idle")return;
+     this.s=null; clearTimeout(s.quiet); clearTimeout(s.max);
+     if(s.text.trim()) s.h.result([s.text.trim()]); else s.h.error(reason==="stopped"||reason==="viewer_stopped"?"no-speech":reason) });
+   refreshMicNotes();
+  }).catch(()=>{});
+ },
+ available(){ return !!(this.dict||this.Native) },
+ listening(){ return !!this.s },
+ start(h){ // must run synchronously inside a tap
+  Voice.stop();
+  if(this.dict && (this.framed || !this.Native)) return this.startDict(h);
+  if(this.Native) return this.startNative(h);
+  h.error("unsupported");
+ },
+ startDict(h){
+  const s={mode:"dict",h,text:"",part:""}; this.s=s;
+  this.dict.start({language:S.lang==="es-419"?"es-MX":S.lang}).then(()=>h.started()).catch(e=>{
+   if(this.s===s){this.s=null;h.error(e?.code||"failed")} });
+  s.max=setTimeout(()=>this.finish(),15000);
+ },
+ startNative(h){
+  const rec=new this.Native(); rec.lang=S.lang; rec.interimResults=true; rec.maxAlternatives=5; rec.continuous=false;
+  const s={mode:"native",h,rec,finals:[],err:null}; this.s=s;
+  rec.onstart=()=>h.started();
+  rec.onresult=e=>{ s.finals=[]; let interim="";
+    for(let i=0;i<e.results.length;i++){const r=e.results[i]; if(r.isFinal) s.finals.push([...r].map(a=>a.transcript)); else interim+=r[0].transcript}
+    s.interim=interim; h.partial((s.finals.map(f=>f[0]).join(" ")+" "+interim).trim()) };
+  rec.onerror=e=>{ s.err=e.error };
+  rec.onend=()=>{ if(this.s===s) this.s=null;
+    if(!s.finals.length) return h.error(s.err||"no-speech");
+    if(s.finals.length===1) return h.result(s.finals[0]);
+    h.result([s.finals.map(f=>f[0]).join(" ")]) };
+  try{rec.start()}catch(e){this.s=null;h.error("failed")}
+ },
+ // Tap "done": score what was heard so far right away, then shut the mic in the background.
+ finish(){ const s=this.s; if(!s)return; this.s=null; clearTimeout(s.quiet); clearTimeout(s.max);
+  let alts;
+  if(s.mode==="dict"){ const t=(s.text+" "+(s.part||"")).trim(); alts=t?[t]:null; this.dict.stop().catch(()=>{}) }
+  else { const fin=s.finals.map(f=>f[0]).join(" "); const t=(fin+" "+(s.interim||"")).trim();
+    alts = s.finals.length===1&&!s.interim ? s.finals[0] : (t?[t]:null);
+    s.rec.onend=null; s.rec.onresult=null; try{s.rec.abort()}catch(e){} }
+  if(alts) s.h.result(alts); else s.h.error("stopped-early");
+ },
+ cancel(){ const s=this.s; if(!s)return; this.s=null; clearTimeout(s.quiet); clearTimeout(s.max);
+  if(s.mode==="dict") this.dict.stop().catch(()=>{}); else { s.rec.onend=null; try{s.rec.abort()}catch(e){} } s.h.error("cancelled") }
+};
+const MIC_ERR = {
+ "not-allowed":"Microphone is blocked. Allow the microphone for this page in your browser settings, then try again.",
+ "not_granted":"Microphone access is off for this page. You can turn it on in the page's Permissions menu.",
+ "service-not-allowed":"Speech recognition is turned off in this browser. On iPhone, turn on Siri & Dictation in Settings.",
+ "stopped-early":"Stopped before I heard anything. Tap the mic, say the line, then tap again.",
+ "cancelled":"Stopped listening so you can hear the audio.",
+ "no-speech":"I didn't hear anything. Tap the button, then speak right away.",
+ "audio-capture":"No microphone was found.",
+ "network":"Speech recognition needs an internet connection.",
+ "unsupported":"Speech recognition isn't available in this browser. Open the app in Chrome or Safari on your phone.",
+ "unavailable":"Spanish speech recognition isn't available here. Open the app in Chrome or Safari on your phone.",
+ "dismissed":"Tap the mic again and choose Allow to practice speaking.",
+ "rate_limited":"Too many tries at once. Wait a few seconds and try again.",
+};
+
+/* ---------- Scoring ---------- */
+const U=["cero","uno","dos","tres","cuatro","cinco","seis","siete","ocho","nueve","diez","once","doce","trece","catorce","quince","dieciseis","diecisiete","dieciocho","diecinueve","veinte","veintiuno","veintidos","veintitres","veinticuatro","veinticinco","veintiseis","veintisiete","veintiocho","veintinueve"];
+const T={3:"treinta",4:"cuarenta",5:"cincuenta",6:"sesenta",7:"setenta",8:"ochenta",9:"noventa"};
+const H={1:"ciento",2:"doscientos",3:"trescientos",4:"cuatrocientos",5:"quinientos",6:"seiscientos",7:"setecientos",8:"ochocientos",9:"novecientos"};
+function numEs(n){ if(n<30)return U[n]; if(n<100){const r=n%10;return T[Math.floor(n/10)]+(r?" y "+U[r]:"")}
+ if(n<1000){const c=Math.floor(n/100),r=n%100; if(n===100)return "cien"; return H[c]+(r?" "+numEs(r):"")} return String(n)}
+function norm(s){
+ s=s.toLowerCase().replace(/['’]s\b/g,"s")
+  .replace(/\$\s?(\d+)(?:[.,](\d{2}))?/g,(m,a,b)=>a+" dolares"+(b&&b!=="00"?" con "+(+b)+" centavos":""))
+  .replace(/(\d)[\s-](?=\d)/g,"$1|")
+  .replace(/\d+(\|\d+)+/g,m=>m.split("|").map(x=>x.split("").map(d=>U[+d]).join(" ")).join(" "))
+  .replace(/\d+/g,m=>+m<1000?numEs(+m):m)
+  .replace(/[áàä]/g,"a").replace(/[éèë]/g,"e").replace(/[íìï]/g,"i").replace(/[óòö]/g,"o").replace(/[úùü]/g,"u")
+  .replace(/[^a-zñ0-9\s]/g," ");
+ return s.split(/\s+/).filter(Boolean).map(w=>({un:"uno",una:"uno",hongos:"champinones"}[w]||w));
+}
+function lev(a,b){const m=a.length,n=b.length;if(!m)return n;if(!n)return m;let p=[...Array(n+1).keys()];
+ for(let i=1;i<=m;i++){const c=[i];for(let j=1;j<=n;j++)c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));p=c}return p[n]}
+function sim(a,b){ if(a===b)return 1; const d=lev(a,b); return 1-d/Math.max(a.length,b.length) }
+function grade(target, heard){
+ const t=norm(target), h=norm(heard), m=t.length, n=h.length;
+ const dp=Array.from({length:m+1},()=>Array(n+1).fill(0));
+ const val=(i,j)=>{const x=sim(t[i],h[j]);return x===1?1:x>=0.7?0.6:0};
+ for(let i=m-1;i>=0;i--)for(let j=n-1;j>=0;j--){const v=val(i,j);dp[i][j]=Math.max(dp[i+1][j],dp[i][j+1],v?v+dp[i+1][j+1]:0)}
+ const st=Array(m).fill("miss"); let i=0,j=0;
+ while(i<m&&j<n){const v=val(i,j); if(v&&dp[i][j]===v+dp[i+1][j+1]){st[i]=v===1?"ok":"close";i++;j++} else if(dp[i+1][j]>=dp[i][j+1])i++; else j++}
+ const extra=Math.max(0,n-m-1)*0.05;
+ const score=m?Math.max(0,Math.round(100*(dp[0][0]/m-extra))):0;
+ return {score,status:st,heard};
+}
+function bestGrade(target, alts){ return alts.map(a=>grade(target,a)).sort((a,b)=>b.score-a.score)[0] }
+function tipsFor(word){
+ const w=word.toLowerCase(), out=[];
+ if(/rr/.test(w)||/^r/.test(w)) out.push(`Roll the r in “${word}”: let the tip of your tongue flutter behind your top teeth.`);
+ else if(/r/.test(w)) out.push(`The r in “${word}” is a quick tap, like the tt in “butter”.`);
+ if(/j|g[eéií]/.test(w)) out.push(`In “${word}”, j (and g before e or i) is a breathy h, like jamón = ha-MOHN.`);
+ if(/ll/.test(w)) out.push(`In “${word}”, ll sounds like an English y: cebolla = seh-BOH-yah.`);
+ if(/ñ/.test(w)) out.push(`In “${word}”, ñ sounds like the ny in “canyon”.`);
+ if(/(^|[^c])h/.test(w)) out.push(`The h in “${word}” is silent.`);
+ if(/qu/.test(w)) out.push(`In “${word}”, qu is a plain k sound: queso = KEH-soh.`);
+ if(/z|c[eéií]/.test(w) && S.lang!=="es-ES") out.push(`In Mexican Spanish, z and c before e or i sound like s in “${word}”.`);
+ if(/v/.test(w)) out.push(`The v in “${word}” sounds close to a soft b.`);
+ if(/[áéíóú]/.test(w)) out.push(`Put the stress on the syllable with the accent mark in “${word}”.`);
+ if(!out.length) out.push(`Keep the vowels in “${word}” short and pure: a = ah, e = eh, i = ee, o = oh, u = oo.`);
+ return out;
+}
+function feedbackHTML(target, g){
+ const words=target.split(/\s+/); const nt=norm(target);
+ // map display words to normalized statuses (display words may expand, e.g. numbers)
+ let k=0; const disp=words.map(w=>{const parts=norm(w);const sts=g.status.slice(k,k+parts.length);k+=parts.length;
+   const s=!parts.length?"ok":sts.every(x=>x==="ok")?"ok":sts.some(x=>x==="miss")?"miss":"close";return [w,s]});
+ const verdict=g.score>=85?"Excelente":g.score>=60?"Casi. Almost there":"Keep practicing";
+ const color=g.score>=85?"var(--ok)":g.score>=60?"var(--close)":"var(--miss)";
+ const trouble=disp.filter(([,s])=>s!=="ok").map(([w])=>w.replace(/[¿?¡!.,]/g,""));
+ const tips=[...new Set(trouble.flatMap(tipsFor))].slice(0,3);
+ return `<div class="fb">
+  <div class="verdict"><b style="color:${color}">${verdict}</b><span>${g.score}%</span></div>
+  <div class="meter"><i style="width:${g.score}%;background:${color}"></i></div>
+  <div class="words">${disp.map(([w,s])=>`<span class="w-${s}">${esc(w)}</span>`).join(" ")}</div>
+  <div class="heard">I heard: “${esc(g.heard)}”</div>
+  ${tips.length?`<ul class="tips">${tips.map(t=>`<li>${esc(t)}</li>`).join("")}</ul>`:`<div class="muted">Every word came through clearly.</div>`}
+ </div>`;
+}
+
+/* Mic widget: big button + live transcript + feedback */
+function micWidget(target, onDone){
+ const box=document.createElement("div"); box.className="mic-area";
+ if(!Mic.available()){
+  box.innerHTML=`<div class="note">${MIC_ERR.unsupported} You can still tap the speaker, listen, and repeat out loud.</div>`; return box;
+ }
+ box.innerHTML=`<button class="bigmic" type="button">${ICON.mic}<span>Tap and say it</span></button><div class="live"></div><div class="out"></div>`;
+ const btn=$(".bigmic",box), live=$(".live",box), out=$(".out",box);
+ const setBtn=on=>{btn.classList.toggle("on",on);btn.innerHTML=on?`${ICON.stop}<span>Listening… tap when done</span>`:`${ICON.mic}<span>Say it again</span>`};
+ btn.addEventListener("click",()=>{
+  if(Mic.listening()){Mic.finish();return}
+  out.innerHTML=""; live.textContent="Getting the mic ready…"; setBtn(true);
+  Mic.start({
+   started(){live.textContent="Listening…"},
+   partial(t){live.textContent=t},
+   result(alts){setBtn(false); live.textContent=""; const g=bestGrade(target,alts); out.innerHTML=feedbackHTML(target,g); onDone&&onDone(g)},
+   error(code){setBtn(false); live.textContent=""; out.innerHTML=`<div class="note">${esc(MIC_ERR[code]||"Something went wrong with the microphone. Try again.")}</div>`}
+  });
+ });
+ return box;
+}
+function refreshMicNotes(){ if(location.hash==="#quiz"&&!quiz.running) render(); }
+
+/* ---------- Practice sheet ---------- */
+function openPractice(item){
+ const bg=document.createElement("div"); bg.className="sheet-bg";
+ bg.innerHTML=`<div class="sheet" role="dialog" aria-modal="true" aria-label="Practice ${esc(item.es)}">
+  <div class="grab"></div>
+  <div class="sheet-head"><div><span class="eyebrow">${esc(item.cat)}</span><span class="es">${esc(item.es)}</span><span class="en">${esc(item.en)}</span>${item.alt?`<span class="alt">${esc(item.alt)}</span>`:""}</div>
+  <button class="iconbtn" data-x aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="row mt"><button class="btn ghost" data-say>${ICON.spk}Listen</button><button class="btn ghost" data-slow>${ICON.slow}Slow</button></div>
+ </div>`;
+ const sheet=$(".sheet",bg);
+ sheet.appendChild(micWidget(item.es,g=>{ if(g.score>=85){markKnown(item.id)} }));
+ const close=()=>{Mic.cancel();bg.remove();render()};
+ bg.addEventListener("click",e=>{if(e.target===bg)close()});
+ $("[data-x]",bg).onclick=close;
+ $("[data-say]",bg).onclick=()=>Voice.say(item.es);
+ $("[data-slow]",bg).onclick=()=>Voice.say(item.es,true);
+ document.addEventListener("keydown",function k(e){if(e.key==="Escape"){close();document.removeEventListener("keydown",k)}});
+ document.body.appendChild(bg); $("[data-say]",bg).focus();
+}
+
+/* ---------- Views ---------- */
+const ui = {wordCat:"All", phraseCat:"All"};
+function listView(items, key, title, lede){
+ const cats=["All",...new Set(items.map(i=>i.cat))]; const cur=ui[key];
+ const shown=cur==="All"?items:items.filter(i=>i.cat===cur);
+ const known=items.filter(i=>S.known.has(i.id)).length;
+ return `<h2>${title}</h2><p class="lede">${lede} <span class="muted">${known} of ${items.length} said well.</span></p>
+ <div class="chips" role="group" aria-label="Category">${cats.map(c=>`<button class="chip" data-cat="${esc(c)}" aria-pressed="${c===cur}">${esc(c)}</button>`).join("")}</div>
+ <ul class="list">${shown.map(i=>`<li class="item">
+   <button class="txt" data-say="${i.id}"><span class="es">${esc(i.es)}${S.known.has(i.id)?'<span class="known-dot" title="Said well"></span>':""}</span><span class="en">${esc(i.en)}</span>${i.alt?`<span class="alt">${esc(i.alt)}</span>`:""}</button>
+   <div class="acts"><button class="round" data-say="${i.id}" aria-label="Hear ${esc(i.es)}">${ICON.spk}</button><button class="round mic" data-prac="${i.id}" aria-label="Practice saying ${esc(i.es)}">${ICON.mic}</button></div>
+ </li>`).join("")}</ul>`;
+}
+const byId = id=>VOCAB.find(x=>x.id===id)||PHRASES.find(x=>x.id===id);
+
+/* Talk */
+const talk={scene:null,idx:0,reveal:false};
+function talkView(){
+ if(talk.scene==null){
+  return `<h2>Practice a real order</h2><p class="lede">The customer speaks, then it's your turn. Say your line and get feedback on each word.</p>
+  <div class="scen">${SCENES.map((s,i)=>`<button data-scene="${i}"><span class="n">${i+1}</span><span><b>${esc(s.t)}</b><small>${esc(s.d)} · ${s.lines.length} lines</small></span></button>`).join("")}</div>`;
+ }
+ const sc=SCENES[talk.scene], L=sc.lines, done=talk.idx>=L.length;
+ const past=L.slice(0,Math.min(talk.idx+ (done?0:(L[talk.idx][0]==="c"?1:0)),L.length));
+ let h=`<button class="btn ghost" data-back>← All conversations</button>
+ <h2 class="mt">${esc(sc.t)}</h2>
+ <label class="toggle"><input type="checkbox" id="hideEs" ${S.hideEs?"checked":""}> Hide my Spanish line until I tap it</label>
+ <div class="chat">${past.map((l,i)=>`<div class="bub ${l[0]}"><div class="who">${l[0]==="c"?"Customer":"You"}</div><span class="es">${esc(l[1])}</span><span class="en">${esc(l[2])}</span>${l[0]==="c"?`<button class="replay" data-replay="${i}">${"Play again"}</button>`:""}</div>`).join("")}</div>`;
+ if(done){
+  h+=`<div class="turn"><b class="es">¡Muy bien! Order complete.</b><div class="row"><button class="btn" data-restart>Run it again</button><button class="btn ghost" data-nextscene>Next conversation</button></div></div>`;
+ } else if(L[talk.idx][0]==="c"){
+  h+=`<div class="row"><button class="btn wide" data-next>Your turn →</button></div>`;
+  if(talk.idx===L.length-1) h=h.replace("Your turn →","Finish");
+ } else {
+  const l=L[talk.idx]; const hide=S.hideEs&&!talk.reveal;
+  h+=`<div class="turn" id="turn"><span class="eyebrow">Your line</span><span class="en" style="color:var(--fg);font-weight:700">${esc(l[2])}</span>
+   <span class="es ${hide?"hidden-es":""}" data-reveal>${esc(l[1])}</span>
+   <div class="row"><button class="btn ghost" data-sayline>${ICON.spk}Hear it</button><button class="btn ghost" data-slowline>${ICON.slow}Slow</button></div>
+   <div id="micslot"></div>
+   <button class="btn wide" data-next>${talk.idx===L.length-1?"Finish":"Next →"}</button></div>`;
+ }
+ return h;
+}
+function afterTalk(){
+ if(talk.scene==null)return;
+ const L=SCENES[talk.scene].lines, slot=$("#micslot");
+ if(slot){ const l=L[talk.idx]; slot.appendChild(micWidget(l[1],()=>{talk.reveal=true;const r=$("[data-reveal]");r&&r.classList.remove("hidden-es")})) }
+}
+function talkAdvance(){
+ const L=SCENES[talk.scene].lines;
+ // advance past current line; if next line is the customer's, play it
+ talk.idx++; talk.reveal=false;
+ if(talk.idx<L.length && L[talk.idx][0]==="c"){ Voice.say(L[talk.idx][1]); }
+ render(); const t=$("#turn")||$(".chat .bub:last-child"); t&&t.scrollIntoView({behavior:"smooth",block:"center"});
+}
+function startScene(i){ talk.scene=i; talk.idx=0; talk.reveal=false; const L=SCENES[i].lines; if(L[0][0]==="c") Voice.say(L[0][1]); render(); window.scrollTo(0,0) }
+
+/* Quiz */
+const quiz={running:false,qs:[],i:0,score:0,answered:false,missed:[],topic:"All",speak:true};
+function buildQuiz(){
+ let pool = quiz.topic==="Phrases"?PHRASES : quiz.topic==="All"?[...VOCAB,...PHRASES] : VOCAB.filter(v=>v.cat===quiz.topic);
+ if(pool.length<4) pool=[...VOCAB];
+ const types=["es2en","en2es","listen"]; if(quiz.speak&&Mic.available()) types.push("say");
+ return shuffle(pool).slice(0,10).map((it,k)=>{
+  const type=types[k%types.length];
+  const same=pool.filter(x=>x.id!==it.id && x.en!==it.en && x.cat===it.cat); const others=shuffle(same.length>=3?same:pool.filter(x=>x.id!==it.id && x.en!==it.en)).slice(0,3);
+  return {it,type,opts:shuffle([it,...others])};
+ }).sort(()=>Math.random()-.5);
+}
+function quizView(){
+ if(!quiz.running){
+  const cats=["All",...new Set(VOCAB.map(v=>v.cat)),"Phrases"];
+  const fin = quiz.qs.length && quiz.i>=quiz.qs.length;
+  let h="";
+  if(fin){
+   const pct=Math.round(100*quiz.score/quiz.qs.length);
+   h+=`<div class="qcard"><span class="eyebrow">Your score</span><div class="big-score">${quiz.score}/${quiz.qs.length}</div>
+   <div>${pct>=80?"¡Excelente! You're ready for the counter.":pct>=50?"Bien. A few more rounds and you've got it.":"Keep going. Try the Toppings tab first, then come back."}</div>
+   ${quiz.missed.length?`<div><span class="eyebrow">Review these</span><ul class="list" style="margin-top:8px">${quiz.missed.map(i=>`<li class="item"><button class="txt" data-say="${i.id}"><span class="es">${esc(i.es)}</span><span class="en">${esc(i.en)}</span></button><div class="acts"><button class="round mic" data-prac="${i.id}" aria-label="Practice">${ICON.mic}</button></div></li>`).join("")}</ul></div>`:""}
+   </div><h2 class="mt">Play again</h2>`;
+  } else {
+   h+=`<h2>Quiz</h2><p class="lede">Ten questions: read, listen${Mic.available()?", and speak":""}. ${S.best!=null?`Best so far: ${S.best}/10.`:""}</p>`;
+  }
+  h+=`<div class="setup"><label class="field" for="qtopic">Topic<select id="qtopic">${cats.map(c=>`<option ${c===quiz.topic?"selected":""}>${esc(c)}</option>`).join("")}</select></label>
+   ${Mic.available()?`<label class="toggle"><input type="checkbox" id="qspeak" ${quiz.speak?"checked":""}> Include speaking questions</label>`:`<div class="note">Speaking questions are off because this browser can't hear you. Open the app in Chrome or Safari to turn them on.</div>`}
+   <button class="btn wide" data-qstart>Start quiz</button></div>`;
+  return h;
+ }
+ const q=quiz.qs[quiz.i], n=quiz.qs.length;
+ const head=`<div class="qtop"><span>Question ${quiz.i+1} of ${n}</span><span>Score ${quiz.score}</span></div><div class="prog"><i style="width:${100*quiz.i/n}%"></i></div>`;
+ let body="";
+ if(q.type==="es2en") body=`<span class="eyebrow">What does this mean?</span><div class="prompt">${esc(q.it.es)}</div><div class="opts">${q.opts.map(o=>`<button class="opt" data-ans="${o.id}">${esc(o.en)}</button>`).join("")}</div>`;
+ if(q.type==="en2es") body=`<span class="eyebrow">How do you say it in Spanish?</span><div class="prompt">${esc(q.it.en)}</div><div class="opts">${q.opts.map(o=>`<button class="opt" data-ans="${o.id}">${esc(o.es)}</button>`).join("")}</div>`;
+ if(q.type==="listen") body=`<span class="eyebrow">Listen. What did the customer say?</span><button class="btn ghost" data-qplay>${ICON.spk}Play</button><div class="opts">${q.opts.map(o=>`<button class="opt" data-ans="${o.id}">${esc(o.en)}</button>`).join("")}</div>`;
+ if(q.type==="say") body=`<span class="eyebrow">Say it in Spanish</span><div class="prompt">${esc(q.it.en)}</div><div id="qmic"></div><div id="qreveal"></div>`;
+ return `<div class="qcard">${head}${body}<div id="qnext"></div></div>`;
+}
+function afterQuiz(){
+ if(!quiz.running)return;
+ const q=quiz.qs[quiz.i];
+ if(q.type==="listen") Voice.say(q.it.es);
+ if(q.type==="say"){
+  const slot=$("#qmic");
+  slot.appendChild(micWidget(q.it.es,g=>{
+   if(quiz.answered)return; quiz.answered=true;
+   if(g.score>=70){quiz.score++;markKnown(q.it.id)} else quiz.missed.push(q.it);
+   $("#qreveal").innerHTML=`<div class="muted">Answer: <b>${esc(q.it.es)}</b></div>`;
+   showNext();
+  }));
+  $("#qnext").innerHTML=`<button class="btn ghost wide" data-qskip>Show answer</button>`;
+ }
+}
+function showNext(){ $("#qnext").innerHTML=`<button class="btn wide" data-qnext>${quiz.i===quiz.qs.length-1?"See score":"Next →"}</button>` }
+function answer(id,btn){
+ if(quiz.answered)return; quiz.answered=true; const q=quiz.qs[quiz.i];
+ const ok=id===q.it.id; if(ok)quiz.score++; else quiz.missed.push(q.it);
+ document.querySelectorAll(".opt").forEach(b=>{ if(b.dataset.ans===q.it.id)b.classList.add("right"); else if(b===btn)b.classList.add("wrong"); b.disabled=true });
+ if(q.type!=="listen") Voice.say(q.it.es);
+ showNext();
+}
+function nextQ(){ quiz.i++; quiz.answered=false;
+ if(quiz.i>=quiz.qs.length){ quiz.running=false; if(S.best==null||quiz.score>S.best){S.best=quiz.score;save("best",S.best)} }
+ render(); window.scrollTo(0,0) }
+
+/* Settings */
+function openSettings(){
+ const bg=document.createElement("div"); bg.className="sheet-bg";
+ const inFrame=window.parent!==window;
+ bg.innerHTML=`<div class="sheet" role="dialog" aria-modal="true" aria-label="Settings"><div class="grab"></div>
+  <div class="sheet-head"><h2 style="margin:0">Settings</h2><button class="iconbtn" data-x aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="setup mt">
+   <label class="field" for="lang">Accent<select id="lang">${Object.entries(ACCENTS).map(([k,v])=>`<option value="${k}" ${k===S.lang?"selected":""}>${v} (${k})</option>`).join("")}</select></label>
+   <label class="field" for="rate">Speaking speed: <span id="rateV">${S.rate.toFixed(2)}×</span><input type="range" id="rate" min="0.6" max="1.2" step="0.05" value="${S.rate}"></label>
+   <div class="row"><button class="btn ghost" data-test>${ICON.spk}Test the voice</button><button class="btn ghost" data-help>Sound help</button></div>
+   <div class="muted" id="voiceInfo"></div>
+   <div class="note"><b>Add to your home screen</b><br>
+    iPhone: open this page in Safari, tap Share, then <b>Add to Home Screen</b>.<br>
+    Android: open it in Chrome, tap the ⋮ menu, then <b>Add to Home screen</b> or <b>Install app</b>.</div>
+   <button class="btn ghost" data-reset>Reset my progress</button>
+  </div></div>`;
+ const vi=$("#voiceInfo",bg); const v=Voice.pick();
+ vi.textContent = v?`Voice: ${v.name} (${v.lang})`: Voice.tts?"Voice: Claude voice":"No Spanish voice found on this device. On iPhone, add one in Settings › Accessibility › Spoken Content › Voices › Spanish.";
+ const close=()=>{bg.remove();render()};
+ bg.addEventListener("click",e=>{if(e.target===bg)close()}); $("[data-x]",bg).onclick=close;
+ $("#lang",bg).onchange=e=>{S.lang=e.target.value;save("lang",S.lang);setAccent();const v=Voice.pick();vi.textContent=v?`Voice: ${v.name} (${v.lang})`:vi.textContent};
+ $("#rate",bg).oninput=e=>{S.rate=+e.target.value;save("rate",S.rate);$("#rateV",bg).textContent=S.rate.toFixed(2)+"×"};
+ $("[data-help]",bg).onclick=()=>{bg.remove();openSoundHelp()};
+ $("[data-test]",bg).onclick=()=>Voice.say("Hola, bienvenido. ¿Qué le puedo servir?");
+ let armed=false; $("[data-reset]",bg).onclick=e=>{ if(!armed){armed=true;e.target.textContent="Tap again to erase progress";return}
+  S.known=new Set();S.best=null;save("known",[]);save("best",null);e.target.textContent="Progress erased";toast("Progress erased") };
+ document.body.appendChild(bg);
+}
+function setAccent(){ $("#accentBtn").textContent=S.lang; $("#sub").textContent=`Spanish for the Domino's counter · ${ACCENTS[S.lang]} accent` }
+
+/* ---------- Router ---------- */
+function render(){
+ const tab=(location.hash||"#words").slice(1); const v=$("#view");
+ document.querySelectorAll("nav.tabs a").forEach(a=>a.setAttribute("aria-current",a.dataset.tab===tab?"page":"false"));
+ if(tab==="phrases") v.innerHTML=listView(PHRASES,"phraseCat","Counter phrases","What you'll say most at the register. Tap any line to hear it.");
+ else if(tab==="talk"){ v.innerHTML=talkView(); afterTalk() }
+ else if(tab==="quiz"){ v.innerHTML=quizView(); afterQuiz() }
+ else v.innerHTML=listView(VOCAB,"wordCat","Toppings & menu words","Built around the Domino's menu. Tap a word to hear it, or tap the mic to say it and get feedback.");
+}
+document.addEventListener("click",e=>{
+ const t=e.target.closest("button,[data-reveal]"); if(!t)return; const d=t.dataset;
+ if(d.cat!=null){ const key=(location.hash==="#phrases")?"phraseCat":"wordCat"; ui[key]=d.cat; render(); return }
+ if(d.say!=null && t.closest("#view")){ const it=byId(d.say); it&&Voice.say(it.es); return }
+ if(d.prac!=null){ const it=byId(d.prac); it&&openPractice(it); return }
+ if(d.scene!=null) return startScene(+d.scene);
+ if(d.back!=null){ talk.scene=null; Voice.stop(); Mic.cancel(); render(); return }
+ if(d.next!=null){ Mic.cancel(); return talkAdvance() }
+ if(d.restart!=null) return startScene(talk.scene);
+ if(d.nextscene!=null) return startScene((talk.scene+1)%SCENES.length);
+ if(d.replay!=null){ Voice.say(SCENES[talk.scene].lines[+d.replay][1]); return }
+ if(d.sayline!=null){ Voice.say(SCENES[talk.scene].lines[talk.idx][1]); return }
+ if(d.slowline!=null){ Voice.say(SCENES[talk.scene].lines[talk.idx][1],true); return }
+ if(d.reveal!=null){ t.classList.remove("hidden-es"); return }
+ if(d.qstart!=null){ quiz.qs=buildQuiz(); quiz.i=0; quiz.score=0; quiz.missed=[]; quiz.answered=false; quiz.running=true; render(); return }
+ if(d.ans!=null) return answer(d.ans,t);
+ if(d.qplay!=null){ Voice.say(quiz.qs[quiz.i].it.es); return }
+ if(d.qskip!=null){ Mic.cancel(); if(!quiz.answered){quiz.answered=true; quiz.missed.push(quiz.qs[quiz.i].it)} $("#qreveal").innerHTML=`<div class="muted">Answer: <b>${esc(quiz.qs[quiz.i].it.es)}</b></div>`; Voice.say(quiz.qs[quiz.i].it.es); showNext(); return }
+ if(d.qnext!=null) return nextQ();
+});
+document.addEventListener("change",e=>{
+ if(e.target.id==="hideEs"){S.hideEs=e.target.checked;save("hideEs",S.hideEs);render()}
+ if(e.target.id==="qtopic") quiz.topic=e.target.value;
+ if(e.target.id==="qspeak") quiz.speak=e.target.checked;
+});
+$("#setBtn").onclick=openSettings; $("#accentBtn").onclick=openSettings;
+window.addEventListener("hashchange",()=>{Mic.cancel();render();window.scrollTo(0,0)});
+Voice.init(); Mic.init(); setAccent(); render();
+if("serviceWorker" in navigator && !window.claude && location.protocol==="https:"){ navigator.serviceWorker.register("sw.js").catch(()=>{}) }
+</script>
+
+</body></html>
