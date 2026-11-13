@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-vXMepWwdfLhpOOH2bG/ojX6ZOMlDpJrPHJCn3zFJNds='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; media-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-nfAfpTOHU7dMPXvm5CLPgPFm6nx2Gln4b7+tOuJcjck='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; media-src 'self' blob:; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#1f6b45">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -102,6 +102,7 @@ h2{font-family:var(--display);font-weight:800;font-size:1.6rem;letter-spacing:-.
 .bigmic.on{background:var(--fg);color:var(--bg);animation:pulse 1.2s ease-in-out infinite}
 @keyframes pulse{50%{box-shadow:0 0 0 8px var(--tomato-soft)}}
 @media (prefers-reduced-motion:reduce){.bigmic.on{animation:none}}
+.linkbtn{background:none;border:0;color:var(--basil);font-weight:700;padding:8px 0;align-self:center;text-decoration:underline;text-underline-offset:3px}
 .live{min-height:1.4em;color:var(--muted);font-style:italic}
 .fb{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:10px}
 .meter{height:10px;border-radius:5px;background:var(--sunk);overflow:hidden}
@@ -459,6 +460,30 @@ function openSoundHelp(){
 }
 
 /* ---------- Speech in ---------- */
+const IS_IOS=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+const IS_STANDALONE=navigator.standalone===true||(window.matchMedia&&matchMedia("(display-mode: standalone)").matches);
+/* Record-and-compare: works where speech checking doesn't (like iPhone home-screen apps). */
+const Rec = {
+ s:null,
+ ok(){ return !!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&window.MediaRecorder) },
+ start(h){
+  Voice.stop(); const s={}; this.s=s;
+  s.boot=setTimeout(()=>{ if(this.s===s&&!s.mr){ this.s=null; h.error("no-start") } },8000);
+  navigator.mediaDevices.getUserMedia({audio:true}).then(st=>{
+   if(this.s!==s){ st.getTracks().forEach(t=>t.stop()); return }
+   clearTimeout(s.boot); const chunks=[]; let mr;
+   try{ mr=new MediaRecorder(st) }catch(e){ st.getTracks().forEach(t=>t.stop()); this.s=null; return h.error("audio-capture") }
+   s.mr=mr; s.st=st;
+   mr.ondataavailable=e=>{ if(e.data&&e.data.size) chunks.push(e.data) };
+   mr.onstop=()=>{ st.getTracks().forEach(t=>t.stop()); if(!chunks.length) return h.error("no-speech");
+     h.done(URL.createObjectURL(new Blob(chunks,{type:mr.mimeType||"audio/mp4"}))) };
+   mr.start(); h.started(); s.max=setTimeout(()=>this.stop(),8000);
+  }).catch(e=>{ clearTimeout(s.boot); if(this.s===s){ this.s=null; h.error(e&&e.name==="NotAllowedError"?"not-allowed":"audio-capture") } });
+ },
+ recording(){ return !!this.s },
+ stop(){ const s=this.s; if(!s)return; this.s=null; clearTimeout(s.max); clearTimeout(s.boot);
+  if(s.mr&&s.mr.state!=="inactive"){ try{s.mr.stop()}catch(e){} } else if(s.st){ s.st.getTracks().forEach(t=>t.stop()) } }
+};
 const Mic = {
  dict:null, Native: window.SpeechRecognition||window.webkitSpeechRecognition, framed: window.parent!==window, s:null,
  init(){
@@ -488,32 +513,40 @@ const Mic = {
   s.max=setTimeout(()=>this.finish(),15000);
  },
  startNative(h){
-  const rec=new this.Native(); rec.lang=S.lang; rec.interimResults=true; rec.maxAlternatives=5; rec.continuous=false;
-  const s={mode:"native",h,rec,finals:[],err:null}; this.s=s;
-  rec.onstart=()=>h.started();
-  rec.onresult=e=>{ s.finals=[]; let interim="";
-    for(let i=0;i<e.results.length;i++){const r=e.results[i]; if(r.isFinal) s.finals.push([...r].map(a=>a.transcript)); else interim+=r[0].transcript}
-    s.interim=interim; h.partial((s.finals.map(f=>f[0]).join(" ")+" "+interim).trim()) };
-  rec.onerror=e=>{ s.err=e.error };
-  rec.onend=()=>{ if(this.s===s) this.s=null;
-    if(!s.finals.length) return h.error(s.err||"no-speech");
-    if(s.finals.length===1) return h.result(s.finals[0]);
-    h.result([s.finals.map(f=>f[0]).join(" ")]) };
-  try{rec.start()}catch(e){this.s=null;h.error("failed")}
+  // Keeps listening until you tap to stop, then waits for the final words and scores them.
+  const rec=new this.Native(); rec.lang=S.lang; rec.interimResults=true; rec.maxAlternatives=5; rec.continuous=true;
+  const s={mode:"native",h,rec,list:[],err:null}; this.s=s;
+  const text=()=>{ const all=s.list.map(r=>r[0]).join(" ").trim(); const last=(s.list[s.list.length-1]||[""])[0].trim();
+    return [...new Set([all,last].filter(Boolean))] };
+  s.done=()=>{ if(s.over) return; s.over=true; clearTimeout(s.boot); clearTimeout(s.max); clearTimeout(s.fin);
+    if(this.s===s) this.s=null; rec.onend=rec.onresult=rec.onerror=null;
+    setTimeout(()=>{try{rec.abort()}catch(e){}},0);
+    const alts=[...new Set([...text(), ...s.list.flatMap(r=>r.slice(1))])];
+    if(text().length) h.result(alts); else h.error(s.err||(s.stoppedByTap?"stopped-early":"no-speech")) };
+  // If the mic never starts (iPhone can hang here), give the screen back after 6 seconds.
+  s.boot=setTimeout(()=>{ if(!s.started&&!s.over){ s.over=true; if(this.s===s) this.s=null; rec.onend=rec.onresult=null; setTimeout(()=>{try{rec.abort()}catch(e){}},0); h.error("no-start") } },6000);
+  rec.onstart=()=>{ s.started=true; clearTimeout(s.boot); s.max=setTimeout(()=>this.finish(),20000); h.started() };
+  rec.onresult=e=>{ s.list=[]; for(let i=0;i<e.results.length;i++){ s.list.push([...e.results[i]].map(a=>a.transcript)) }
+    const t=text(); h.partial(t[0]||"") };
+  rec.onerror=e=>{ s.err=e.error; if(e.error!=="no-speech"&&e.error!=="aborted") s.done() };
+  rec.onend=()=>s.done();
+  try{rec.start()}catch(e){clearTimeout(s.boot);this.s=null;h.error("failed")}
  },
- // Tap "done": score what was heard so far right away, then shut the mic in the background.
- finish(){ const s=this.s; if(!s)return; this.s=null; clearTimeout(s.quiet); clearTimeout(s.max);
-  let alts;
-  if(s.mode==="dict"){ const t=(s.text+" "+(s.part||"")).trim(); alts=t?[t]:null; this.dict.stop().catch(()=>{}) }
-  else { const fin=s.finals.map(f=>f[0]).join(" "); const t=(fin+" "+(s.interim||"")).trim();
-    alts = s.finals.length===1&&!s.interim ? s.finals[0] : (t?[t]:null);
-    s.rec.onend=null; s.rec.onresult=null; try{s.rec.abort()}catch(e){} }
-  if(alts) s.h.result(alts); else s.h.error("stopped-early");
+ // Tap "done": stop listening, wait briefly for the last words, then score.
+ finish(){ const s=this.s; if(!s)return;
+  if(s.mode==="dict"){ this.s=null; clearTimeout(s.quiet); clearTimeout(s.max);
+    const t=(s.text+" "+(s.part||"")).trim(); this.dict.stop().catch(()=>{});
+    return t? s.h.result([t]) : s.h.error("stopped-early") }
+  if(s.finishing) return; s.finishing=true; s.stoppedByTap=true; s.h.checking&&s.h.checking();
+  if(!s.started) return s.done();
+  try{s.rec.stop()}catch(e){ return s.done() }
+  s.fin=setTimeout(()=>s.done(),2500);
  },
  cancel(){ const s=this.s; if(!s)return; this.s=null; clearTimeout(s.quiet); clearTimeout(s.max);
-  if(s.mode==="dict") this.dict.stop().catch(()=>{}); else { s.rec.onend=null; try{s.rec.abort()}catch(e){} } s.h.error("cancelled") }
+  clearTimeout(s.boot); clearTimeout(s.fin); if(s.mode==="dict") this.dict.stop().catch(()=>{}); else { s.over=true; s.rec.onend=s.rec.onresult=s.rec.onerror=null; setTimeout(()=>{try{s.rec.abort()}catch(e){}},0) } s.h.error("cancelled") }
 };
 const MIC_ERR = {
+ "no-start":"The mic didn't start. Tap the button to try again. If it keeps happening on iPhone, open the link in Safari instead of the home-screen icon, or record yourself below.",
  "not-allowed":"Microphone is blocked. Allow the microphone for this page in your browser settings, then try again.",
  "not_granted":"Microphone access is off for this page. You can turn it on in the page's Permissions menu.",
  "service-not-allowed":"Speech recognition is turned off in this browser. On iPhone, turn on Siri & Dictation in Settings.",
@@ -592,24 +625,52 @@ function feedbackHTML(target, g){
  </div>`;
 }
 
-/* Mic widget: big button + live transcript + feedback */
+/* Mic widget: big button + live transcript + feedback. Falls back to record-and-compare. */
 function micWidget(target, onDone){
  const box=document.createElement("div"); box.className="mic-area";
- if(!Mic.available()){
+ const canCheck=Mic.available();
+ if(!canCheck && !Rec.ok()){
   box.innerHTML=`<div class="note">${MIC_ERR.unsupported} You can still tap the speaker, listen, and repeat out loud.</div>`; return box;
  }
- box.innerHTML=`<button class="bigmic" type="button">${ICON.mic}<span>Tap and say it</span></button><div class="live"></div><div class="out"></div>`;
+ box.innerHTML=`<button class="bigmic" type="button"></button><div class="live"></div><div class="out"></div>
+  ${canCheck&&Rec.ok()?`<button class="linkbtn" type="button" data-recmode>Record myself instead</button>`:""}`;
  const btn=$(".bigmic",box), live=$(".live",box), out=$(".out",box);
- const setBtn=on=>{btn.classList.toggle("on",on);btn.innerHTML=on?`${ICON.stop}<span>Listening… tap when done</span>`:`${ICON.mic}<span>Say it again</span>`};
+ let mode=canCheck?"check":"rec";
+ const idle=()=>{btn.classList.remove("on");btn.innerHTML=mode==="check"?`${ICON.mic}<span>Tap and say it</span>`:`${ICON.mic}<span>Record myself</span>`};
+ const on=()=>{btn.classList.add("on");btn.innerHTML=`${ICON.stop}<span>${mode==="check"?"Listening…":"Recording…"} tap when done</span>`};
+ idle();
+ if(mode==="rec") out.innerHTML=`<div class="note">Record yourself, then compare with the Spanish voice.</div>`;
+ const showRec=url=>{
+  out.innerHTML=`<div class="fb"><div class="verdict"><b>Compare</b></div>
+   <div class="row"><button class="btn ghost" data-mine>${ICON.spk}Play mine</button><button class="btn ghost" data-model>${ICON.spk}Play Spanish</button></div>
+   <div class="row"><button class="btn" data-good>Sounded right</button><button class="btn ghost" data-again>Not yet</button></div></div>`;
+  const au=new Audio(url);
+  $("[data-mine]",out).onclick=()=>{Voice.stop();au.currentTime=0;au.play().catch(()=>toast("Couldn't play your recording."))};
+  $("[data-model]",out).onclick=()=>{au.pause();Voice.say(target)};
+  $("[data-good]",out).onclick=()=>{out.innerHTML=`<div class="note">Nice. Keep going.</div>`;onDone&&onDone({score:100,self:true})};
+  $("[data-again]",out).onclick=()=>{out.innerHTML="";onDone&&onDone({score:0,self:true})};
+ };
+ const showErr=code=>{ idle(); live.textContent="";
+  out.innerHTML=`<div class="note">${esc(MIC_ERR[code]||"Something went wrong with the microphone. Try again.")}</div>`;
+};
+ const rm=$("[data-recmode]",box);
+ if(rm) rm.onclick=()=>{ Mic.cancel(); mode="rec"; rm.remove(); idle(); out.innerHTML=`<div class="note">Record yourself, then compare with the Spanish voice.</div>` };
  btn.addEventListener("click",()=>{
-  if(Mic.listening()){Mic.finish();return}
-  out.innerHTML=""; live.textContent="Getting the mic ready…"; setBtn(true);
-  Mic.start({
-   started(){live.textContent="Listening…"},
-   partial(t){live.textContent=t},
-   result(alts){setBtn(false); live.textContent=""; const g=bestGrade(target,alts); out.innerHTML=feedbackHTML(target,g); onDone&&onDone(g)},
-   error(code){setBtn(false); live.textContent=""; out.innerHTML=`<div class="note">${esc(MIC_ERR[code]||"Something went wrong with the microphone. Try again.")}</div>`}
-  });
+  if(mode==="check"){
+   if(Mic.listening()){Mic.finish();return}
+   out.innerHTML=""; live.textContent="Getting the mic ready…"; on();
+   Mic.start({
+    started(){live.textContent="Listening… say it, then tap the button"},
+    checking(){btn.classList.remove("on");btn.innerHTML=`<span>Checking what you said…</span>`},
+    partial(t){live.textContent=t},
+    result(alts){idle(); live.textContent=""; const g=bestGrade(target,alts); out.innerHTML=feedbackHTML(target,g); onDone&&onDone(g)},
+    error:showErr
+   });
+  } else {
+   if(Rec.recording()){Rec.stop();return}
+   out.innerHTML=""; live.textContent="Getting the mic ready…"; on();
+   Rec.start({ started(){live.textContent="Recording… say it now"}, done(url){idle();live.textContent="";showRec(url)}, error:showErr });
+  }
  });
  return box;
 }
@@ -626,7 +687,7 @@ function openPractice(item){
  </div>`;
  const sheet=$(".sheet",bg);
  sheet.appendChild(micWidget(item.es,g=>{ if(g.score>=85){markKnown(item.id)} }));
- const close=()=>{Mic.cancel();bg.remove();render()};
+ const close=()=>{Mic.cancel();Rec.stop();bg.remove();render()};
  bg.addEventListener("click",e=>{if(e.target===bg)close()});
  $("[data-x]",bg).onclick=close;
  $("[data-say]",bg).onclick=()=>Voice.say(item.es);
@@ -805,7 +866,7 @@ document.addEventListener("click",e=>{
  if(d.prac!=null){ const it=byId(d.prac); it&&openPractice(it); return }
  if(d.scene!=null) return startScene(+d.scene);
  if(d.back!=null){ talk.scene=null; Voice.stop(); Mic.cancel(); render(); return }
- if(d.next!=null){ Mic.cancel(); return talkAdvance() }
+ if(d.next!=null){ Mic.cancel(); Rec.stop(); return talkAdvance() }
  if(d.restart!=null) return startScene(talk.scene);
  if(d.nextscene!=null) return startScene((talk.scene+1)%SCENES.length);
  if(d.replay!=null){ Voice.say(SCENES[talk.scene].lines[+d.replay][1]); return }
@@ -824,7 +885,7 @@ document.addEventListener("change",e=>{
  if(e.target.id==="qspeak") quiz.speak=e.target.checked;
 });
 $("#setBtn").onclick=openSettings; $("#accentBtn").onclick=openSettings;
-window.addEventListener("hashchange",()=>{Mic.cancel();render();window.scrollTo(0,0)});
+window.addEventListener("hashchange",()=>{Mic.cancel();Rec.stop();render();window.scrollTo(0,0)});
 Voice.init(); Mic.init(); setAccent(); render();
 if("serviceWorker" in navigator && !window.claude && location.protocol==="https:"){ navigator.serviceWorker.register("sw.js").catch(()=>{}) }
 </script>
